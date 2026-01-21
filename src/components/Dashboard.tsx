@@ -115,6 +115,7 @@ export function Dashboard() {
       pix: 0,
       debit_card: 0,
       credit_card: 0,
+      deposito: 0,
     };
 
     filteredTransactions
@@ -159,6 +160,7 @@ export function Dashboard() {
       pix: 'PIX',
       debit_card: 'Débito',
       credit_card: 'Crédito',
+     deposito: 'Depósito',
     };
     return labels[method] || method;
   };
@@ -278,6 +280,14 @@ export function Dashboard() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Crédito:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.incomeByMethod.credit_card)}
+                  </span>
+                </div>
+              </div>
+            </div>
+             <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Depósito:</span>
                   <span className="font-semibold text-gray-800">
                     {formatCurrency(summary.incomeByMethod.credit_card)}
                   </span>
