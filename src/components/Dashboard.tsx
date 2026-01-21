@@ -95,6 +95,18 @@ export function Dashboard() {
       .filter(t => t.type === 'expense' && t.category === 'variable')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const taxExpenses = filteredTransactions
+      .filter(t => t.type === 'expense' && t.category === 'imposto')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const medicalRepassExpenses = filteredTransactions
+      .filter(t => t.type === 'expense' && t.category === 'repasse_medico')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const advanceExpenses = filteredTransactions
+      .filter(t => t.type === 'expense' && t.category === 'adiantamento')
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const currentBalance = (initialBalance?.amount || 0) + income - expenses;
 
     const incomeByMethod = {
@@ -115,6 +127,9 @@ export function Dashboard() {
       expenses,
       fixedExpenses,
       variableExpenses,
+      taxExpenses,
+      medicalRepassExpenses,
+      advanceExpenses,
       currentBalance,
       incomeByMethod,
     };
@@ -148,7 +163,14 @@ export function Dashboard() {
   };
 
   const getCategoryLabel = (category: string) => {
-    return category === 'fixed' ? 'Fixa' : 'Variável';
+    const labels: Record<string, string> = {
+      fixed: 'Fixa',
+      variable: 'Variável',
+      imposto: 'Imposto',
+      repasse_medico: 'Repasse Médico',
+      adiantamento: 'Adiantamento',
+    };
+    return labels[category] || category;
   };
 
   const formatCurrency = (value: number) => {
@@ -276,6 +298,32 @@ export function Dashboard() {
                   <span className="font-semibold text-gray-800">
                     {formatCurrency(summary.variableExpenses)}
                   </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Impostos e afins:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.taxExpenses)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Repasse Médico:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.medicalRepassExpenses)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Adiantamentos:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.advanceExpenses)}
+                  </span>
+                </div>
+                <div className="pt-2 mt-2 border-t border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 font-medium">Total de Saídas:</span>
+                    <span className="font-bold text-gray-800">
+                      {formatCurrency(summary.expenses)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
