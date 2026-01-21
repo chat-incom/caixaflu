@@ -23,9 +23,13 @@ export type Transaction = {
   type: 'income' | 'expense';
   amount: number;
   description: string;
-  payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash';
-  category?: 'fixed' | 'variable';
   date: string;
+  reference_month?: string;
+  payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash';
+  income_category?: 'consulta' | 'infiltracao' | 'onda_choque' | 'cirurgias' | 'outros';
+  category?: 'repasse_medico' | 'repasse' | 'adiantamento' | 'fixed' | 'variable';
+  subcategory?: string;
+  fixed_subcategory?: 'internet' | 'energia' | 'condominio' | 'funcionario';
   created_at: string;
   updated_at: string;
 };

@@ -12,7 +12,9 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash'>('cash');
-  const [category, setCategory] = useState<'fixed' | 'variable'>('variable');
+  const [incomeCategory, setIncomeCategory] = useState<'consulta' | 'infiltracao' | 'onda_choque' | 'cirurgias' | 'outros'>('consulta');
+  const [category, setCategory] = useState<'repasse_medico' | 'repasse' | 'adiantamento' | 'fixed' | 'variable'>('variable');
+  const [subcategory, setSubcategory] = useState('');
   const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'energia' | 'condominio' | 'funcionario'>('internet');
   const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -38,10 +40,14 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
       date,
       reference_month: referenceMonth,
       ...(type === 'income'
-        ? { payment_method: paymentMethod }
+        ? {
+            payment_method: paymentMethod,
+            income_category: incomeCategory
+          }
         : {
             category,
-            ...(category === 'fixed' ? { fixed_subcategory: fixedSubcategory } : {})
+            ...(category === 'fixed' ? { fixed_subcategory: fixedSubcategory } : {}),
+            ...(category === 'repasse_medico' || category === 'repasse' ? { subcategory } : {})
           }
       ),
     };
@@ -146,22 +152,42 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
           </div>
 
           {type === 'income' ? (
-            <div>
-              <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-2">
-                Forma de Pagamento
-              </label>
-              <select
-                id="payment_method"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              >
-                <option value="cash">Dinheiro</option>
-                <option value="pix">PIX</option>
-                <option value="debit_card">Cartão de Débito</option>
-                <option value="credit_card">Cartão de Crédito</option>
-              </select>
-            </div>
+            <>
+              <div>
+                <label htmlFor="income_category" className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoria
+                </label>
+                <select
+                  id="income_category"
+                  value={incomeCategory}
+                  onChange={(e) => setIncomeCategory(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                >
+                  <option value="consulta">Consulta</option>
+                  <option value="infiltracao">Infiltração</option>
+                  <option value="onda_choque">Onda de Choque</option>
+                  <option value="cirurgias">Cirurgias</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-2">
+                  Forma de Pagamento
+                </label>
+                <select
+                  id="payment_method"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                >
+                  <option value="cash">Dinheiro</option>
+                  <option value="pix">PIX</option>
+                  <option value="debit_card">Cartão de Débito</option>
+                  <option value="credit_card">Cartão de Crédito</option>
+                </select>
+              </div>
+            </>
           ) : (
             <>
               <div>
@@ -175,9 +201,57 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 >
                   <option value="variable">Variável</option>
+                  <option value="repasse_medico">Repasse Médico</option>
+                  <option value="repasse">Repasse</option>
+                  <option value="adiantamento">Adiantamento</option>
                   <option value="fixed">Fixa</option>
                 </select>
               </div>
+
+              {category === 'repasse_medico' && (
+                <div>
+                  <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Médico
+                  </label>
+                  <select
+                    id="subcategory"
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  >
+                    <option value="">Selecione o médico</option>
+                    <option value="Dr. Antônio Carlos">Dr. Antônio Carlos</option>
+                    <option value="Dr. Alexandre">Dr. Alexandre</option>
+                    <option value="Dr. Átylla">Dr. Átylla</option>
+                    <option value="Dr. Carlos Eduardo">Dr. Carlos Eduardo</option>
+                    <option value="Dr. Elcione">Dr. Elcione</option>
+                    <option value="Dr. Leonardo">Dr. Leonardo</option>
+                    <option value="Dr. Ícaro">Dr. Ícaro</option>
+                    <option value="Dr. Gilmar">Dr. Gilmar</option>
+                    <option value="Dr. Sebastião">Dr. Sebastião</option>
+                  </select>
+                </div>
+              )}
+
+              {category === 'repasse' && (
+                <div>
+                  <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Repasse
+                  </label>
+                  <select
+                    id="subcategory"
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  >
+                    <option value="">Selecione o tipo</option>
+                    <option value="Por Convênio">Por Convênio</option>
+                    <option value="Particular">Particular</option>
+                  </select>
+                </div>
+              )}
 
               {category === 'fixed' && (
                 <div>
