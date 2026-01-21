@@ -90,6 +90,7 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
     pix: 'PIX',
     debit_card: 'Cartão de Débito',
     credit_card: 'Cartão de Crédito',
+    deposito: 'Depósito',
     outros: 'Outros'
   };
 
