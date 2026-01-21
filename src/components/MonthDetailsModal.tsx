@@ -97,7 +97,13 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
     internet: 'Internet',
     energia: 'Energia',
     condominio: 'Condomínio',
-    funcionario: 'Funcionário'
+    funcionario: 'Funcionário',
+     contabilidade: 'Contabilidade',
+     sistema: 'Sistema',
+     impressora: 'Impressora',
+     supermercado: 'Supermercado',
+     insumo: 'Insumo'
+    
   };
 
   return (
