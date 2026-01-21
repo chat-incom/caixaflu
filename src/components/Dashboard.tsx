@@ -111,6 +111,10 @@ export function Dashboard() {
       .filter(t => t.type === 'expense' && t.category === 'fatura')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const investimentosExpenses = filteredTransactions
+    .filter(t => t.type === 'expense' && t.category === 'investimentos')
+    .reduce((sum, t) => sum + t.amount, 0);
+
     const currentBalance = (initialBalance?.amount || 0) + income - expenses;
 
     const incomeByMethod = {
@@ -136,6 +140,7 @@ export function Dashboard() {
       medicalRepassExpenses,
       advanceExpenses,
       faturaExpenses,
+      investimentosExpenses,
       currentBalance,
       incomeByMethod,
     };
@@ -177,6 +182,7 @@ export function Dashboard() {
       repasse_medico: 'Repasse Médico',
       adiantamento: 'Adiantamento',
       fatura: 'Fatura',
+      investimentos: 'Investimentos',
     };
     return labels[category] || category;
   };
@@ -337,6 +343,12 @@ export function Dashboard() {
                     {formatCurrency(summary.faturaExpenses)}
                   </span>
                 </div>
+
+                   <div className="flex justify-between items-center">
+      <span className="text-gray-600">Investimentos:</span>
+      <span className="font-semibold text-gray-800">
+        {formatCurrency(summary.investimentosExpenses)}
+      </span>
                 <div className="pt-2 mt-2 border-t border-gray-200">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">Total de Saídas:</span>
