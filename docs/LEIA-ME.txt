@@ -1,0 +1,178 @@
+================================================================================
+DOCUMENTAÇÃO DO SISTEMA DE FLUXO DE CAIXA
+================================================================================
+
+Esta pasta contém toda a documentação do sistema.
+
+================================================================================
+ARQUIVOS DISPONÍVEIS
+================================================================================
+
+1. README.md
+   - Índice principal da documentação
+   - Visão geral do sistema
+   - Guia de navegação
+
+2. BANCO_DE_DADOS.md
+   - Documentação técnica completa do banco de dados
+   - Estrutura de todas as tabelas
+   - Explicação de campos e tipos
+   - Políticas de segurança (RLS)
+   - Índices e otimizações
+   - Exemplos de consultas SQL
+
+3. schema.sql
+   - ARQUIVO SQL COMPLETO DO SCHEMA
+   - Contém todo o código SQL aplicado no banco
+   - Inclui: tabelas, índices, políticas RLS, triggers
+   - 10 queries úteis comentadas
+   - Queries de verificação de integridade
+   - IMPORTANTE: Este arquivo é apenas para referência!
+     A migration já foi aplicada. NÃO execute novamente.
+
+4. COMO_USAR.md
+   - Guia completo do usuário
+   - Passo a passo para usar o sistema
+   - Como adicionar transações
+   - Como usar filtros
+   - Dicas e boas práticas
+   - Perguntas frequentes
+
+5. RESUMO_ALTERACOES.md
+   - Resumo executivo de todas as alterações
+   - O que foi criado, atualizado e removido
+   - Funcionalidades implementadas
+   - Status do projeto
+
+6. CHECKLIST_VERIFICACAO.md
+   - Lista de verificação completa
+   - Checklist de funcionalidades
+   - Testes recomendados
+   - Verificação de segurança
+
+7. MIGRATION_APLICADA.md
+   - Status da migration do banco de dados
+   - Confirmação de que tudo foi aplicado
+   - Estrutura atual do banco
+   - Troubleshooting
+
+8. LEIA-ME.txt
+   - Este arquivo
+   - Índice de todos os documentos
+
+================================================================================
+COMO USAR ESTA DOCUMENTAÇÃO
+================================================================================
+
+USUÁRIOS DO SISTEMA:
+→ Leia primeiro: COMO_USAR.md
+→ Depois consulte: README.md
+
+DESENVOLVEDORES:
+→ Leia primeiro: README.md
+→ Depois consulte: BANCO_DE_DADOS.md e schema.sql
+→ Para alterações: RESUMO_ALTERACOES.md
+
+ADMINISTRADORES:
+→ Leia primeiro: MIGRATION_APLICADA.md
+→ Depois consulte: BANCO_DE_DADOS.md
+→ Para referência SQL: schema.sql
+
+================================================================================
+ARQUIVO SCHEMA.SQL - IMPORTANTE
+================================================================================
+
+O arquivo schema.sql contém:
+
+✅ Definição completa de todas as tabelas
+✅ Todos os índices criados
+✅ Todas as políticas RLS (Row Level Security)
+✅ Todos os triggers e funções
+✅ 10 queries úteis para consultas comuns
+✅ Queries para verificar integridade do banco
+✅ Comentários explicativos em português
+
+ATENÇÃO:
+- Este arquivo é APENAS PARA REFERÊNCIA
+- A migration JÁ FOI APLICADA no banco de dados
+- NÃO execute este arquivo novamente
+- Use-o para consulta e entendimento do schema
+
+Você pode usar as queries comentadas no schema.sql copiando-as e
+descomentando (removendo /* e */) antes de executar.
+
+================================================================================
+ESTRUTURA DO BANCO
+================================================================================
+
+TABELAS:
+- initial_balances  → Saldo inicial de cada usuário
+- transactions      → Todas as transações (entradas e saídas)
+- profiles          → Perfis de usuários
+
+ÍNDICES:
+- idx_transactions_user_id  → Otimiza buscas por usuário
+- idx_transactions_date     → Otimiza filtros por período
+- idx_transactions_type     → Otimiza filtros por tipo
+
+SEGURANÇA:
+- RLS habilitado em todas as tabelas
+- 12 políticas RLS ativas
+- Cada usuário só acessa seus próprios dados
+
+AUTOMAÇÃO:
+- Triggers para atualizar updated_at automaticamente
+- Trigger para criar perfil ao registrar usuário
+
+================================================================================
+QUERIES DISPONÍVEIS NO schema.sql
+================================================================================
+
+1. Buscar saldo inicial do usuário atual
+2. Buscar todas as transações do usuário
+3. Buscar transações do último mês
+4. Total de entradas por forma de pagamento
+5. Total de saídas por categoria
+6. Calcular saldo atual
+7. Resumo financeiro completo
+8. Transações agrupadas por data
+9. Últimas 10 transações
+10. Comparativo mensal
+
+Queries de verificação:
+- Verificar tabelas e RLS
+- Verificar políticas
+- Verificar índices
+- Verificar triggers
+
+================================================================================
+SUPORTE
+================================================================================
+
+Para dúvidas:
+1. Consulte a documentação relevante
+2. Verifique o CHECKLIST_VERIFICACAO.md
+3. Leia as queries de exemplo no schema.sql
+4. Entre em contato com o administrador
+
+================================================================================
+STATUS DO SISTEMA
+================================================================================
+
+✅ Banco de dados configurado
+✅ Migration aplicada com sucesso
+✅ Todas as tabelas criadas
+✅ RLS habilitado e funcionando
+✅ Índices criados
+✅ Triggers ativos
+✅ Sistema 100% operacional
+
+================================================================================
+ÚLTIMA ATUALIZAÇÃO
+================================================================================
+
+Data: 21/01/2026
+Versão: 1.0.0
+Migration: 20260121014105_create_cashflow_schema.sql
+
+================================================================================
