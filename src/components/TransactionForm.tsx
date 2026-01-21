@@ -13,7 +13,7 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash' | 'deposito'>('cash');
   const [incomeCategory, setIncomeCategory] = useState<'consultorio' | 'externo' | 'rateio' | 'cirurgias' | 'outros'>('consultorio');
-  const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantamento' | 'fixed' | 'variable'>('variable');
+ const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantamento' | 'fatura' | 'fixed' | 'variable'>('variable');
   const [subcategory, setSubcategory] = useState('');
   const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo' | 'condominio' | 'funcionario' | 'energia'>('internet');
   const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -206,6 +206,7 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                   <option value="imposto">Imposto e afins</option>
                   <option value="adiantamento">Adiantamento</option>
                   <option value="repasse_medico">Repasse Médico</option>
+                  <option value="fatura">Fatura</option>
                 </select>
               </div>
 
