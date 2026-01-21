@@ -25,11 +25,11 @@ export type Transaction = {
   description: string;
   date: string;
   reference_month?: string;
-  payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash';
-  income_category?: 'consulta' | 'infiltracao' | 'onda_choque' | 'cirurgias' | 'outros';
-  category?: 'repasse_medico' | 'repasse' | 'adiantamento' | 'fixed' | 'variable';
+  payment_method?: 'credit_card' | 'debit_card' | 'pix' | 'cash' | 'deposito';
+  income_category?: 'consultorio' | 'externo' | 'rateio' | 'cirurgias' | 'outros';
+  category?: 'repasse_medico' | 'imposto' | 'adiantamento' | 'fatura' | 'investimentos' | 'fixed' | 'variable';
   subcategory?: string;
-  fixed_subcategory?: 'internet' | 'energia' | 'condominio' | 'funcionario';
+  fixed_subcategory?: 'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo' | 'condominio' | 'funcionario' | 'energia';
   created_at: string;
   updated_at: string;
 };

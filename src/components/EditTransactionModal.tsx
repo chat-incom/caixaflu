@@ -1,0 +1,301 @@
+import { useState, useEffect } from 'react';
+import { useCashFlow } from '../contexts/CashFlowContext';
+import { Transaction } from '../lib/supabase';
+import { X } from 'lucide-react';
+
+type EditTransactionModalProps = {
+  transaction: Transaction;
+  onClose: () => void;
+};
+
+export function EditTransactionModal({ transaction, onClose }: EditTransactionModalProps) {
+  const { updateTransaction } = useCashFlow();
+  const [amount, setAmount] = useState(transaction.amount.toString());
+  const [description, setDescription] = useState(transaction.description);
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash' | 'deposito'>(transaction.payment_method || 'cash');
+  const [incomeCategory, setIncomeCategory] = useState<'consultorio' | 'externo' | 'rateio' | 'cirurgias' | 'outros'>(transaction.income_category || 'consultorio');
+  const [category, setCategory] = useState<'repasse_medico' | 'imposto' | 'adiantamento' | 'fatura' | 'investimentos' | 'fixed' | 'variable'>(transaction.category || 'variable');
+  const [subcategory, setSubcategory] = useState(transaction.subcategory || '');
+  const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo' | 'condominio' | 'funcionario' | 'energia'>(transaction.fixed_subcategory || 'internet');
+  const [referenceMonth, setReferenceMonth] = useState(transaction.reference_month || new Date().toISOString().slice(0, 7));
+  const [date, setDate] = useState(transaction.date);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setError('Por favor, insira um valor válido maior que zero');
+      setLoading(false);
+      return;
+    }
+
+    const updates = {
+      amount: numAmount,
+      description,
+      date,
+      reference_month: referenceMonth,
+      ...(transaction.type === 'income'
+        ? {
+            payment_method: paymentMethod,
+            income_category: incomeCategory
+          }
+        : {
+            category,
+            ...(category === 'fixed' ? { fixed_subcategory: fixedSubcategory } : {}),
+            ...(category === 'repasse_medico' || category === 'repasse' ? { subcategory } : {})
+          }
+      ),
+    };
+
+    const { error } = await updateTransaction(transaction.id, updates);
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">Editar Transação</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">Tipo:</span> {transaction.type === 'income' ? 'Entrada' : 'Saída'}
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
+              Valor (R$)
+            </label>
+            <input
+              id="amount"
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              placeholder="0,00"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+              Descrição
+            </label>
+            <input
+              id="description"
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              placeholder="Ex: Venda de produto"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+              Data
+            </label>
+            <input
+              id="date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              required
+            />
+          </div>
+
+          {transaction.type === 'income' ? (
+            <>
+              <div>
+                <label htmlFor="income_category" className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoria
+                </label>
+                <select
+                  id="income_category"
+                  value={incomeCategory}
+                  onChange={(e) => setIncomeCategory(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                >
+                  <option value="consultorio">Consultório</option>
+                  <option value="externo">Externo</option>
+                  <option value="rateio">Rateio</option>
+                  <option value="cirurgias">Cirurgias</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-2">
+                  Forma de Pagamento
+                </label>
+                <select
+                  id="payment_method"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                >
+                  <option value="cash">Dinheiro</option>
+                  <option value="pix">PIX</option>
+                  <option value="debit_card">Cartão de Débito</option>
+                  <option value="credit_card">Cartão de Crédito</option>
+                  <option value="deposito">Depósito</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoria
+                </label>
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                >
+                  <option value="variable">Variável</option>
+                  <option value="fixed">Fixa</option>
+                  <option value="imposto">Imposto e afins</option>
+                  <option value="adiantamento">Adiantamento</option>
+                  <option value="repasse_medico">Repasse Médico</option>
+                  <option value="fatura">Fatura</option>
+                  <option value="investimentos">Investimentos</option>
+                </select>
+              </div>
+
+              {category === 'repasse_medico' && (
+                <div>
+                  <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Médico
+                  </label>
+                  <select
+                    id="subcategory"
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  >
+                    <option value="">Selecione o médico</option>
+                    <option value="Dr. Antônio Carlos">Dr. Antônio Carlos</option>
+                    <option value="Dr. Alexandre">Dr. Alexandre</option>
+                    <option value="Dr. Átylla">Dr. Átylla</option>
+                    <option value="Dr. Carlos Eduardo">Dr. Carlos Eduardo</option>
+                    <option value="Dr. Elcione">Dr. Elcione</option>
+                    <option value="Dr. Leonardo">Dr. Leonardo</option>
+                    <option value="Dr. Ícaro">Dr. Ícaro</option>
+                    <option value="Dr. Gilmar">Dr. Gilmar</option>
+                    <option value="Dr. Sebastião">Dr. Sebastião</option>
+                  </select>
+                </div>
+              )}
+
+              {category === 'repasse' && (
+                <div>
+                  <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Repasse
+                  </label>
+                  <select
+                    id="subcategory"
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  >
+                    <option value="">Selecione o tipo</option>
+                    <option value="Por Convênio">Por Convênio</option>
+                    <option value="Particular">Particular</option>
+                  </select>
+                </div>
+              )}
+
+              {category === 'fixed' && (
+                <div>
+                  <label htmlFor="fixed_subcategory" className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo de Despesa Fixa
+                  </label>
+                  <select
+                    id="fixed_subcategory"
+                    value={fixedSubcategory}
+                    onChange={(e) => setFixedSubcategory(e.target.value as any)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  >
+                    <option value="internet">Internet</option>
+                    <option value="contabilidade">Contabilidade</option>
+                    <option value="sistema">Sistema</option>
+                    <option value="energia">Energia</option>
+                    <option value="impressora">Impressora</option>
+                    <option value="condominio">Condomínio</option>
+                    <option value="funcionario">Funcionário</option>
+                    <option value="supermercado">Supermercado</option>
+                    <option value="insumo">Insumo Hospitalar</option>
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
+          <div>
+            <label htmlFor="reference_month" className="block text-sm font-medium text-gray-700 mb-2">
+              Mês de Referência
+            </label>
+            <input
+              id="reference_month"
+              type="month"
+              value={referenceMonth}
+              onChange={(e) => setReferenceMonth(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

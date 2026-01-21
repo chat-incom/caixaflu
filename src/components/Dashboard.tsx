@@ -4,6 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { TransactionForm } from './TransactionForm';
 import { MonthDetailsModal } from './MonthDetailsModal';
 import { EditInitialBalanceModal } from './EditInitialBalanceModal';
+import { EditTransactionModal } from './EditTransactionModal';
+import { Logo } from './Logo';
+import { Transaction } from '../lib/supabase';
 import {
   Plus,
   LogOut,
@@ -15,6 +18,7 @@ import {
   Calendar,
   FileText,
   Edit3,
+  Edit2,
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -23,6 +27,7 @@ export function Dashboard() {
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [showMonthDetails, setShowMonthDetails] = useState(false);
   const [showEditBalance, setShowEditBalance] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'month' | 'week'>('month');
 
@@ -212,8 +217,8 @@ export function Dashboard() {
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">Fluxo de Caixa</h1>
-              <p className="text-gray-600 mt-1">{user?.email}</p>
+              <Logo size="medium" showText={true} />
+              <p className="text-gray-600 mt-2 ml-1">{user?.email}</p>
             </div>
             <button
               onClick={signOut}
@@ -344,11 +349,13 @@ export function Dashboard() {
                   </span>
                 </div>
 
-                   <div className="flex justify-between items-center">
-      <span className="text-gray-600">Investimentos:</span>
-      <span className="font-semibold text-gray-800">
-        {formatCurrency(summary.investimentosExpenses)}
-      </span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Investimentos:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.investimentosExpenses)}
+                  </span>
+                </div>
+
                 <div className="pt-2 mt-2 border-t border-gray-200">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700 font-medium">Total de Saídas:</span>
@@ -509,12 +516,22 @@ export function Dashboard() {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => handleDelete(transaction.id)}
-                    className="flex-shrink-0 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex-shrink-0 flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingTransaction(transaction)}
+                      className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"
+                      title="Editar transação"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(transaction.id)}
+                      className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
+                      title="Excluir transação"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -539,6 +556,13 @@ export function Dashboard() {
         <EditInitialBalanceModal
           currentBalance={initialBalance?.amount || 0}
           onClose={() => setShowEditBalance(false)}
+        />
+      )}
+
+      {editingTransaction && (
+        <EditTransactionModal
+          transaction={editingTransaction}
+          onClose={() => setEditingTransaction(null)}
         />
       )}
     </div>
