@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { TransactionForm } from './TransactionForm';
 import { MonthDetailsModal } from './MonthDetailsModal';
 import { EditInitialBalanceModal } from './EditInitialBalanceModal';
-import { Logo } from './Logo';
 import {
   Plus,
   LogOut,
@@ -108,6 +107,10 @@ export function Dashboard() {
       .filter(t => t.type === 'expense' && t.category === 'adiantamento')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const faturaExpenses = filteredTransactions
+      .filter(t => t.type === 'expense' && t.category === 'fatura')
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const currentBalance = (initialBalance?.amount || 0) + income - expenses;
 
     const incomeByMethod = {
@@ -132,6 +135,7 @@ export function Dashboard() {
       taxExpenses,
       medicalRepassExpenses,
       advanceExpenses,
+      faturaExpenses,
       currentBalance,
       incomeByMethod,
     };
@@ -160,7 +164,7 @@ export function Dashboard() {
       pix: 'PIX',
       debit_card: 'Débito',
       credit_card: 'Crédito',
-     deposito: 'Depósito',
+      deposito: 'Depósito',
     };
     return labels[method] || method;
   };
@@ -172,6 +176,7 @@ export function Dashboard() {
       imposto: 'Imposto',
       repasse_medico: 'Repasse Médico',
       adiantamento: 'Adiantamento',
+      fatura: 'Fatura',
     };
     return labels[category] || category;
   };
@@ -201,8 +206,8 @@ export function Dashboard() {
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <Logo size="medium" showText={true} />
-              <p className="text-gray-600 mt-2 ml-1">{user?.email}</p>
+              <h1 className="text-3xl font-bold text-gray-800">Fluxo de Caixa</h1>
+              <p className="text-gray-600 mt-1">{user?.email}</p>
             </div>
             <button
               onClick={signOut}
@@ -284,12 +289,10 @@ export function Dashboard() {
                     {formatCurrency(summary.incomeByMethod.credit_card)}
                   </span>
                 </div>
-              </div>
-            </div>
-             <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">Depósito:</span>
                   <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.credit_card)}
+                    {formatCurrency(summary.incomeByMethod.deposito)}
                   </span>
                 </div>
               </div>
@@ -326,6 +329,12 @@ export function Dashboard() {
                   <span className="text-gray-600">Adiantamentos:</span>
                   <span className="font-semibold text-gray-800">
                     {formatCurrency(summary.advanceExpenses)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Faturas:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.faturaExpenses)}
                   </span>
                 </div>
                 <div className="pt-2 mt-2 border-t border-gray-200">
