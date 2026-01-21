@@ -12,10 +12,10 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash'>('cash');
-  const [incomeCategory, setIncomeCategory] = useState<'consulta' | 'infiltracao' | 'onda_choque' | 'cirurgias' | 'outros'>('consulta');
-  const [category, setCategory] = useState<'repasse_medico' | 'repasse' | 'adiantamento' | 'fixed' | 'variable'>('variable');
+  const [incomeCategory, setIncomeCategory] = useState<'consultório' | 'Externo ' | 'Rateio' | 'cirurgias' | 'outros'>('consultório');
+  const [category, setCategory] = useState<'repasse_medico' | 'adiantamento' | 'fixed' | 'variable'>('variable');
   const [subcategory, setSubcategory] = useState('');
-  const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'energia' | 'condominio' | 'funcionario'>('internet');
+  const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo hospitalar' |  'condominio' | 'funcionario'>('internet');
   const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
