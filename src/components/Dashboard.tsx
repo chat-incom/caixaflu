@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { TransactionForm } from './TransactionForm';
 import { MonthDetailsModal } from './MonthDetailsModal';
 import { EditInitialBalanceModal } from './EditInitialBalanceModal';
+import { Logo } from './Logo';
 import {
   Plus,
   LogOut,
@@ -198,8 +199,8 @@ export function Dashboard() {
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">Fluxo de Caixa</h1>
-              <p className="text-gray-600 mt-1">{user?.email}</p>
+              <Logo size="medium" showText={true} />
+              <p className="text-gray-600 mt-2 ml-1">{user?.email}</p>
             </div>
             <button
               onClick={signOut}
