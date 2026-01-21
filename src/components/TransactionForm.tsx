@@ -11,7 +11,7 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
   const [type, setType] = useState<'income' | 'expense'>('income');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash' | 'deposito'>('cash');
   const [incomeCategory, setIncomeCategory] = useState<'consultorio' | 'externo' | 'rateio' | 'cirurgias' | 'outros'>('consultorio');
   const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantamento' | 'fixed' | 'variable'>('variable');
   const [subcategory, setSubcategory] = useState('');
@@ -185,6 +185,7 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                   <option value="pix">PIX</option>
                   <option value="debit_card">Cartão de Débito</option>
                   <option value="credit_card">Cartão de Crédito</option>
+                   <option value="deposito">Depósito</option>
                 </select>
               </div>
             </>
