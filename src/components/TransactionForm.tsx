@@ -12,10 +12,10 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'debit_card' | 'pix' | 'cash'>('cash');
-  const [incomeCategory, setIncomeCategory] = useState<'consultório' | 'Externo ' | 'Rateio' | 'cirurgias' | 'outros'>('consultório');
-  const [category, setCategory] = useState<'repasse_medico' | 'adiantamento' | 'fixed' | 'variable'>('variable');
+  const [incomeCategory, setIncomeCategory] = useState<'consultorio' | 'externo ' | 'Rateio' | 'cirurgias' | 'outros'>('consultório');
+  const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantamento' | 'fixed' | 'variable'>('variable');
   const [subcategory, setSubcategory] = useState('');
-  const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo hospitalar' |  'condominio' | 'funcionario'>('internet');
+  const [fixedSubcategory, setFixedSubcategory] = useState<'internet' | 'contabilidade' | 'sistema' | 'impressora' | 'supermercado' | 'insumo' |  'condominio' | 'funcionario'>('internet');
   const [referenceMonth, setReferenceMonth] = useState(new Date().toISOString().slice(0, 7));
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
@@ -163,9 +163,9 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                   onChange={(e) => setIncomeCategory(e.target.value as any)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 >
-                  <option value="consulta">Consulta</option>
-                  <option value="infiltracao">Infiltração</option>
-                  <option value="onda_choque">Onda de Choque</option>
+                  <option value="consultorio">Consultório</option>
+                  <option value="externo">Externo</option>
+                  <option value="rateio">Rateio</option>
                   <option value="cirurgias">Cirurgias</option>
                   <option value="outros">Outros</option>
                 </select>
@@ -201,10 +201,10 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 >
                   <option value="variable">Variável</option>
-                  <option value="repasse_medico">Repasse Médico</option>
-                  <option value="repasse">Repasse</option>
-                  <option value="adiantamento">Adiantamento</option>
                   <option value="fixed">Fixa</option>
+                  <option value="imposto">Imposto e afins</option>
+                  <option value="adiantamento">Adiantamento</option>
+                  <option value="repasse_medico">Repasse Médico</option>
                 </select>
               </div>
 
@@ -265,9 +265,14 @@ export function TransactionForm({ onClose }: TransactionFormProps) {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                   >
                     <option value="internet">Internet</option>
+                      <option value="contabilidade">Contabilidade</option>
+                      <option value="sistema">Sistema</option>
                     <option value="energia">Energia</option>
+                      <option value="impressora">Impressora</option>
                     <option value="condominio">Condomínio</option>
                     <option value="funcionario">Funcionário</option>
+                      <option value="supermercado">Supermercado</option>
+                      <option value="insumo">Insumo Hospitalar</option>
                   </select>
                 </div>
               )}
