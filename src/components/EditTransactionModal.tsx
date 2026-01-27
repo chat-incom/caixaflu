@@ -212,6 +212,7 @@ export function EditTransactionModal({ transaction, onClose }: EditTransactionMo
                     <option value="Dr. Josemith Saraiva">Dr. Josemith Saraiva</option>
                     <option value="Dr. Leonardo">Dr. Leonardo</option>
                     <option value="Dr. Sebastião">Dr. Sebastião</option>
+                    <option value="Dr. Leandro Carneiro">Dr. Leandro Carneiro</option> 
                   </select>
                 </div>
               )}
