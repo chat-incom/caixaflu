@@ -181,11 +181,11 @@ const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantam
                   onChange={(e) => setPaymentMethod(e.target.value as any)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 >
-                  <option value="cash">Dinheiro</option>
                   <option value="pix">PIX</option>
                   <option value="debit_card">Cartão de Débito</option>
                   <option value="credit_card">Cartão de Crédito</option>
-                   <option value="deposito">Depósito</option>
+                  <option value="deposito">Depósito</option>
+                  <option value="cash">Dinheiro</option>
                 </select>
               </div>
             </>
