@@ -224,14 +224,17 @@ const [category, setCategory] = useState<'repasse_medico' |'imposto' | 'adiantam
                     required
                   >
                     <option value="">Selecione o médico</option>
-                    <option value="Dr. Antônio Carlos">Dr. Antônio Carlos</option>
                     <option value="Dr. Alexandre">Dr. Alexandre</option>
+                    <option value="Dr. Anderson Matheus">Dr. Anderson Matheus</option>
+                    <option value="Dr. Antônio Carlos">Dr. Antônio Carlos</option>
                     <option value="Dr. Átylla">Dr. Átylla</option>
                     <option value="Dr. Carlos Eduardo">Dr. Carlos Eduardo</option>
                     <option value="Dr. Elcione">Dr. Elcione</option>
-                    <option value="Dr. Leonardo">Dr. Leonardo</option>
-                    <option value="Dr. Ícaro">Dr. Ícaro</option>
                     <option value="Dr. Gilmar">Dr. Gilmar</option>
+                    <option value="Dr. Ícaro">Dr. Ícaro</option>
+                    <option value="Dra. Itamara Neves">Dra. Itamara Neves</option>
+                    <option value="Dr. Josemith Saraiva">Dr. Josemith Saraiva</option>
+                    <option value="Dr. Leonardo">Dr. Leonardo</option>
                     <option value="Dr. Sebastião">Dr. Sebastião</option>
                   </select>
                 </div>
