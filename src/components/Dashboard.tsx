@@ -123,11 +123,11 @@ export function Dashboard() {
     const currentBalance = (initialBalance?.amount || 0) + income - expenses;
 
     const incomeByMethod = {
-      cash: 0,
       pix: 0,
       debit_card: 0,
       credit_card: 0,
       deposito: 0,
+      cash: 0,
     };
 
     filteredTransactions
@@ -170,11 +170,11 @@ export function Dashboard() {
 
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
-      cash: 'Dinheiro',
       pix: 'PIX',
       debit_card: 'Débito',
       credit_card: 'Crédito',
       deposito: 'Depósito',
+      cash: 'Dinheiro',
     };
     return labels[method] || method;
   };
@@ -277,15 +277,15 @@ export function Dashboard() {
               <h3 className="font-semibold text-gray-800 mb-3">Entradas por Método</h3>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Dinheiro:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.cash)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
                   <span className="text-gray-600">PIX:</span>
                   <span className="font-semibold text-gray-800">
                     {formatCurrency(summary.incomeByMethod.pix)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Dinheiro:</span>
+                  <span className="font-semibold text-gray-800">
+                    {formatCurrency(summary.incomeByMethod.cash)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
