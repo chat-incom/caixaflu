@@ -284,6 +284,13 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     return cat ? cat.label : category;
   };
 
+  const formatReferenceMonth = (monthString: string) => {
+    if (!monthString) return '-';
+    const [year, month] = monthString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, 15);
+    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+  };
+
   const getMonthlyStats = () => {
     const stats: { [key: string]: { total: number; count: number } } = {};
 
@@ -366,11 +373,15 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todos os meses</option>
-              {monthlyStats.map((stat) => (
-                <option key={stat.month} value={stat.month}>
-                  {new Date(stat.month + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                </option>
-              ))}
+              {monthlyStats.map((stat) => {
+                const [year, month] = stat.month.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 15);
+                return (
+                  <option key={stat.month} value={stat.month}>
+                    {date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -607,7 +618,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                       <>
                         <td className="py-3 px-2 text-sm text-gray-700">{formatDate(transfer.date)}</td>
                         <td className="py-3 px-2 text-sm text-gray-700">
-                          {transfer.reference_month ? new Date(transfer.reference_month + '-01').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '-'}
+                          {formatReferenceMonth(transfer.reference_month)}
                         </td>
                         <td className="py-3 px-2 text-sm font-medium text-gray-800">{transfer.doctor_name || '-'}</td>
                         <td className="py-3 px-2 text-sm text-gray-700">{getOptionLabel(transfer.option_type)}</td>
