@@ -33,15 +33,21 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     if (selectedMonth) {
       filtered = filtered.filter(t => t.reference_month === selectedMonth);
     }
+    console.log('Doctor Transfers:', filtered);
     return filtered;
   }, [transfers, doctorName, selectedMonth]);
 
   const incomeTransfers = useMemo(() => {
-    return doctorTransfers.filter(t => t.option_type !== 'expense');
+    const filtered = doctorTransfers.filter(t => t.option_type !== 'expense');
+    console.log('Income Transfers:', filtered);
+    return filtered;
   }, [doctorTransfers]);
 
   const expenseTransfers = useMemo(() => {
-    return doctorTransfers.filter(t => t.option_type === 'expense');
+    const filtered = doctorTransfers.filter(t => t.option_type === 'expense');
+    console.log('Expense Transfers:', filtered);
+    console.log('Expense amounts:', filtered.map(t => ({ desc: t.description, amount: t.expense_amount, category: t.expense_category })));
+    return filtered;
   }, [doctorTransfers]);
 
   const totals = useMemo(() => {
@@ -79,6 +85,8 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       grouped[category].total += t.expense_amount;
     });
 
+    console.log('Expenses By Category:', grouped);
+    console.log('Number of categories:', Object.keys(grouped).length);
     return grouped;
   }, [expenseTransfers]);
 
