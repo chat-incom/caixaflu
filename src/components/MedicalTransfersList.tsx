@@ -303,16 +303,19 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       newExpanded.delete(doctorName);
     } else {
       newExpanded.add(doctorName);
-      if (!expenseForm[doctorName]) {
-        setExpenseForm({
-          ...expenseForm,
-          [doctorName]: {
-            description: '',
-            amount: 0,
-            category: 'rateio_mensal'
-          }
-        });
-      }
+      setExpenseForm(prev => {
+        if (!prev[doctorName]) {
+          return {
+            ...prev,
+            [doctorName]: {
+              description: '',
+              amount: 0,
+              category: 'rateio_mensal'
+            }
+          };
+        }
+        return prev;
+      });
     }
     setExpandedDoctors(newExpanded);
   };
@@ -351,14 +354,14 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
 
       if (error) throw error;
 
-      setExpenseForm({
-        ...expenseForm,
+      setExpenseForm(prev => ({
+        ...prev,
         [doctorName]: {
           description: '',
           amount: 0,
           category: 'rateio_mensal'
         }
-      });
+      }));
 
       fetchTransfers();
       alert('Saída lançada com sucesso!');
@@ -557,13 +560,16 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Categoria</label>
                                 <select
                                   value={expenseForm[stat.doctor]?.category || 'rateio_mensal'}
-                                  onChange={(e) => setExpenseForm({
-                                    ...expenseForm,
-                                    [stat.doctor]: {
-                                      ...expenseForm[stat.doctor],
-                                      category: e.target.value
-                                    }
-                                  })}
+                                  onChange={(e) => {
+                                    const currentForm = expenseForm[stat.doctor] || { description: '', amount: 0, category: 'rateio_mensal' };
+                                    setExpenseForm(prev => ({
+                                      ...prev,
+                                      [stat.doctor]: {
+                                        ...currentForm,
+                                        category: e.target.value
+                                      }
+                                    }));
+                                  }}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                   {EXPENSE_CATEGORIES.map(cat => (
@@ -576,13 +582,16 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                                 <input
                                   type="text"
                                   value={expenseForm[stat.doctor]?.description || ''}
-                                  onChange={(e) => setExpenseForm({
-                                    ...expenseForm,
-                                    [stat.doctor]: {
-                                      ...expenseForm[stat.doctor],
-                                      description: e.target.value
-                                    }
-                                  })}
+                                  onChange={(e) => {
+                                    const currentForm = expenseForm[stat.doctor] || { description: '', amount: 0, category: 'rateio_mensal' };
+                                    setExpenseForm(prev => ({
+                                      ...prev,
+                                      [stat.doctor]: {
+                                        ...currentForm,
+                                        description: e.target.value
+                                      }
+                                    }));
+                                  }}
                                   placeholder="Descrição da saída"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -593,13 +602,16 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                                   type="number"
                                   step="0.01"
                                   value={expenseForm[stat.doctor]?.amount || ''}
-                                  onChange={(e) => setExpenseForm({
-                                    ...expenseForm,
-                                    [stat.doctor]: {
-                                      ...expenseForm[stat.doctor],
-                                      amount: parseFloat(e.target.value) || 0
-                                    }
-                                  })}
+                                  onChange={(e) => {
+                                    const currentForm = expenseForm[stat.doctor] || { description: '', amount: 0, category: 'rateio_mensal' };
+                                    setExpenseForm(prev => ({
+                                      ...prev,
+                                      [stat.doctor]: {
+                                        ...currentForm,
+                                        amount: parseFloat(e.target.value) || 0
+                                      }
+                                    }));
+                                  }}
                                   placeholder="0.00"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
