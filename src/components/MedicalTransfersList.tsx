@@ -14,6 +14,11 @@ interface MedicalTransfer {
   net_amount: number;
   doctor_name: string;
   reference_month: string;
+  payment_method: string;
+  payment_discount_percentage: number;
+  payment_discount_amount: number;
+  expense_category: string | null;
+  expense_amount: number;
 }
 
 interface MedicalTransfersListProps {
@@ -48,6 +53,15 @@ const OPTION3_CATEGORIES = [
 const DISCOUNT_OPTION1 = 16.33;
 const DISCOUNT_OPTION2 = 10.93;
 const DISCOUNT_OPTION3 = 10.93;
+const DISCOUNT_DEBIT = 1.7;
+const DISCOUNT_CREDIT = 2.5;
+
+const EXPENSE_CATEGORIES = [
+  { value: 'rateio_mensal', label: 'Rateio Mensal' },
+  { value: 'medicacao', label: 'Medicação' },
+  { value: 'insumo', label: 'Insumo' },
+  { value: 'outros', label: 'Outros' }
+];
 
 export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfersListProps) {
   const [transfers, setTransfers] = useState<MedicalTransfer[]>([]);
@@ -117,7 +131,10 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       description: transfer.description,
       amount: transfer.amount,
       doctor_name: transfer.doctor_name,
-      reference_month: transfer.reference_month
+      reference_month: transfer.reference_month,
+      payment_method: transfer.payment_method,
+      expense_category: transfer.expense_category,
+      expense_amount: transfer.expense_amount
     });
   };
 
@@ -152,15 +169,37 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     }
   };
 
-  const calculateValues = (amountValue: number, optionType: string) => {
+  const getPaymentDiscount = (paymentMethod: string) => {
+    switch (paymentMethod) {
+      case 'debit_card':
+        return DISCOUNT_DEBIT;
+      case 'credit_card':
+        return DISCOUNT_CREDIT;
+      default:
+        return 0;
+    }
+  };
+
+  const calculateValues = (amountValue: number, optionType: string, paymentMethod: string) => {
     const discountPercentage = getCurrentDiscount(optionType);
     const discountAmount = (amountValue * discountPercentage) / 100;
-    const netAmount = amountValue - discountAmount;
-    return { discountPercentage, discountAmount, netAmount };
+
+    const paymentDiscountPercentage = getPaymentDiscount(paymentMethod);
+    const paymentDiscountAmount = (amountValue * paymentDiscountPercentage) / 100;
+
+    const netAmount = amountValue - discountAmount - paymentDiscountAmount;
+
+    return {
+      discountPercentage,
+      discountAmount,
+      paymentDiscountPercentage,
+      paymentDiscountAmount,
+      netAmount
+    };
   };
 
   const saveEdit = async () => {
-    if (!editingId || !editForm.amount || !editForm.category || !editForm.doctor_name || !editForm.reference_month) {
+    if (!editingId || !editForm.amount || !editForm.category || !editForm.doctor_name || !editForm.reference_month || !editForm.payment_method) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
@@ -168,7 +207,16 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     try {
       const amountValue = editForm.amount;
       const optionType = editForm.option_type || 'option1';
-      const { discountPercentage, discountAmount, netAmount } = calculateValues(amountValue, optionType);
+      const paymentMethod = editForm.payment_method || 'pix';
+      const expenseAmountValue = editForm.expense_amount || 0;
+
+      const {
+        discountPercentage,
+        discountAmount,
+        paymentDiscountPercentage,
+        paymentDiscountAmount,
+        netAmount
+      } = calculateValues(amountValue, optionType, paymentMethod);
 
       const { error } = await supabase
         .from('medical_transfers')
@@ -182,7 +230,12 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           discount_amount: discountAmount,
           net_amount: netAmount,
           doctor_name: editForm.doctor_name,
-          reference_month: editForm.reference_month
+          reference_month: editForm.reference_month,
+          payment_method: paymentMethod,
+          payment_discount_percentage: paymentDiscountPercentage,
+          payment_discount_amount: paymentDiscountAmount,
+          expense_category: editForm.expense_category || null,
+          expense_amount: expenseAmountValue
         })
         .eq('id', editingId);
 
@@ -213,6 +266,22 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   const formatDate = (dateString: string) => {
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('pt-BR');
+  };
+
+  const getPaymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      cash: 'Dinheiro',
+      debit_card: 'Débito',
+      credit_card: 'Crédito',
+      pix: 'PIX'
+    };
+    return labels[method] || method;
+  };
+
+  const getExpenseCategoryLabel = (category: string | null) => {
+    if (!category) return '-';
+    const cat = EXPENSE_CATEGORIES.find(c => c.value === category);
+    return cat ? cat.label : category;
   };
 
   const getMonthlyStats = () => {
@@ -268,7 +337,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
 
   const totalRepasse = filteredTransfers.reduce((sum, t) => sum + t.net_amount, 0);
   const totalEntrada = filteredTransfers.reduce((sum, t) => sum + t.amount, 0);
-  const totalDesconto = filteredTransfers.reduce((sum, t) => sum + t.discount_amount, 0);
+  const totalDesconto = filteredTransfers.reduce((sum, t) => sum + t.discount_amount + (t.payment_discount_amount || 0), 0);
+  const totalSaida = filteredTransfers.reduce((sum, t) => sum + (t.expense_amount || 0), 0);
+  const totalLiquido = totalRepasse - totalSaida;
 
   if (loading) {
     return (
@@ -320,7 +391,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <p className="text-sm text-blue-600 font-medium">Total de Entradas</p>
             <p className="text-2xl font-bold text-blue-700">R$ {totalEntrada.toFixed(2)}</p>
@@ -330,12 +401,16 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
             <p className="text-2xl font-bold text-red-700">R$ {totalDesconto.toFixed(2)}</p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <p className="text-sm text-green-600 font-medium">Total de Repasses</p>
+            <p className="text-sm text-green-600 font-medium">Repasse Bruto</p>
             <p className="text-2xl font-bold text-green-700">R$ {totalRepasse.toFixed(2)}</p>
           </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 font-medium">Quantidade</p>
-            <p className="text-2xl font-bold text-gray-700">{filteredTransfers.length}</p>
+          <div className="bg-orange-50 p-4 rounded-lg">
+            <p className="text-sm text-orange-600 font-medium">Total de Saídas</p>
+            <p className="text-2xl font-bold text-orange-700">R$ {totalSaida.toFixed(2)}</p>
+          </div>
+          <div className="bg-teal-50 p-4 rounded-lg">
+            <p className="text-sm text-teal-600 font-medium">Repasse Líquido</p>
+            <p className="text-2xl font-bold text-teal-700">R$ {totalLiquido.toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -449,12 +524,22 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                           <select
                             value={editForm.category}
                             onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className="w-full px-2 py-1 border rounded text-sm mb-1"
                           >
                             <option value="">Selecione</option>
                             {getCurrentCategories(editForm.option_type || 'option1').map((cat) => (
                               <option key={cat} value={cat}>{cat}</option>
                             ))}
+                          </select>
+                          <select
+                            value={editForm.payment_method}
+                            onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          >
+                            <option value="pix">PIX</option>
+                            <option value="cash">Dinheiro</option>
+                            <option value="debit_card">Débito</option>
+                            <option value="credit_card">Crédito</option>
                           </select>
                         </td>
                         <td className="py-3 px-2">
@@ -462,8 +547,30 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                             type="text"
                             value={editForm.description}
                             onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
+                            className="w-full px-2 py-1 border rounded text-sm mb-1"
+                            placeholder="Descrição"
                           />
+                          <div className="flex gap-1">
+                            <select
+                              value={editForm.expense_category || ''}
+                              onChange={(e) => setEditForm({ ...editForm, expense_category: e.target.value || null })}
+                              className="flex-1 px-2 py-1 border rounded text-sm"
+                            >
+                              <option value="">Sem saída</option>
+                              {EXPENSE_CATEGORIES.map((cat) => (
+                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.expense_amount || 0}
+                              onChange={(e) => setEditForm({ ...editForm, expense_amount: parseFloat(e.target.value) || 0 })}
+                              className="w-20 px-2 py-1 border rounded text-sm"
+                              placeholder="0.00"
+                              disabled={!editForm.expense_category}
+                            />
+                          </div>
                         </td>
                         <td className="py-3 px-2">
                           <input
@@ -504,16 +611,41 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                         </td>
                         <td className="py-3 px-2 text-sm font-medium text-gray-800">{transfer.doctor_name || '-'}</td>
                         <td className="py-3 px-2 text-sm text-gray-700">{getOptionLabel(transfer.option_type)}</td>
-                        <td className="py-3 px-2 text-sm text-gray-700">{transfer.category}</td>
-                        <td className="py-3 px-2 text-sm text-gray-600">{transfer.description || '-'}</td>
+                        <td className="py-3 px-2 text-sm text-gray-700">
+                          {transfer.category}
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {getPaymentMethodLabel(transfer.payment_method || 'pix')}
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 text-sm text-gray-600">
+                          {transfer.description || '-'}
+                          {transfer.expense_category && (
+                            <div className="text-xs text-orange-600 mt-0.5">
+                              Saída: {getExpenseCategoryLabel(transfer.expense_category)}
+                            </div>
+                          )}
+                        </td>
                         <td className="py-3 px-2 text-sm text-gray-700 text-right">
                           R$ {transfer.amount.toFixed(2)}
                         </td>
                         <td className="py-3 px-2 text-sm text-red-600 text-right">
-                          - R$ {transfer.discount_amount.toFixed(2)} ({transfer.discount_percentage}%)
+                          - R$ {(transfer.discount_amount + (transfer.payment_discount_amount || 0)).toFixed(2)}
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            ({transfer.discount_percentage}%{(transfer.payment_discount_percentage || 0) > 0 ? ` + ${transfer.payment_discount_percentage}%` : ''})
+                          </div>
                         </td>
                         <td className="py-3 px-2 text-sm font-semibold text-green-600 text-right">
                           R$ {transfer.net_amount.toFixed(2)}
+                          {(transfer.expense_amount || 0) > 0 && (
+                            <>
+                              <div className="text-xs text-orange-600 mt-0.5">
+                                - R$ {transfer.expense_amount.toFixed(2)}
+                              </div>
+                              <div className="text-xs font-bold text-teal-600 mt-0.5">
+                                = R$ {(transfer.net_amount - transfer.expense_amount).toFixed(2)}
+                              </div>
+                            </>
+                          )}
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex gap-1 justify-center">

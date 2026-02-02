@@ -34,6 +34,15 @@ const OPTION3_CATEGORIES = [
 const DISCOUNT_OPTION1 = 16.33;
 const DISCOUNT_OPTION2 = 10.93;
 const DISCOUNT_OPTION3 = 10.93;
+const DISCOUNT_DEBIT = 1.7;
+const DISCOUNT_CREDIT = 2.5;
+
+const EXPENSE_CATEGORIES = [
+  { value: 'rateio_mensal', label: 'Rateio Mensal' },
+  { value: 'medicacao', label: 'Medicação' },
+  { value: 'insumo', label: 'Insumo' },
+  { value: 'outros', label: 'Outros' }
+];
 
 export default function MedicalTransferForm({ onTransferAdded }: MedicalTransferFormProps) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -49,6 +58,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
   });
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
   const [newDoctorName, setNewDoctorName] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'debit_card' | 'credit_card' | 'pix'>('pix');
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
 
   useEffect(() => {
     fetchDoctors();
@@ -119,11 +131,35 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     }
   };
 
+  const getPaymentDiscount = () => {
+    switch (paymentMethod) {
+      case 'debit_card':
+        return DISCOUNT_DEBIT;
+      case 'credit_card':
+        return DISCOUNT_CREDIT;
+      default:
+        return 0;
+    }
+  };
+
   const calculateValues = (amountValue: number) => {
     const discountPercentage = getCurrentDiscount();
     const discountAmount = (amountValue * discountPercentage) / 100;
-    const netAmount = amountValue - discountAmount;
-    return { discountPercentage, discountAmount, netAmount };
+
+    const paymentDiscountPercentage = getPaymentDiscount();
+    const paymentDiscountAmount = (amountValue * paymentDiscountPercentage) / 100;
+
+    const totalDiscountAmount = discountAmount + paymentDiscountAmount;
+    const netAmount = amountValue - totalDiscountAmount;
+
+    return {
+      discountPercentage,
+      discountAmount,
+      paymentDiscountPercentage,
+      paymentDiscountAmount,
+      totalDiscountAmount,
+      netAmount
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,7 +179,14 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
       if (!user) throw new Error('Usuário não autenticado');
 
       const amountValue = parseFloat(amount);
-      const { discountPercentage, discountAmount, netAmount } = calculateValues(amountValue);
+      const expenseAmountValue = expenseAmount ? parseFloat(expenseAmount) : 0;
+      const {
+        discountPercentage,
+        discountAmount,
+        paymentDiscountPercentage,
+        paymentDiscountAmount,
+        netAmount
+      } = calculateValues(amountValue);
 
       const { error } = await supabase
         .from('medical_transfers')
@@ -159,7 +202,12 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
             discount_amount: discountAmount,
             net_amount: netAmount,
             doctor_name: finalDoctorName,
-            reference_month: referenceMonth
+            reference_month: referenceMonth,
+            payment_method: paymentMethod,
+            payment_discount_percentage: paymentDiscountPercentage,
+            payment_discount_amount: paymentDiscountAmount,
+            expense_category: expenseCategory || null,
+            expense_amount: expenseAmountValue
           }
         ]);
 
@@ -170,6 +218,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
       setAmount('');
       setDoctorName('');
       setNewDoctorName('');
+      setPaymentMethod('pix');
+      setExpenseCategory('');
+      setExpenseAmount('');
       fetchDoctors();
       onTransferAdded();
     } catch (error) {
@@ -184,11 +235,41 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     const amountValue = parseFloat(amount);
     if (isNaN(amountValue) || amountValue <= 0) return null;
 
-    const { discountPercentage, discountAmount, netAmount } = calculateValues(amountValue);
-    return { discountPercentage, discountAmount, netAmount };
+    const {
+      discountPercentage,
+      discountAmount,
+      paymentDiscountPercentage,
+      paymentDiscountAmount,
+      totalDiscountAmount,
+      netAmount
+    } = calculateValues(amountValue);
+
+    const expenseAmountValue = expenseAmount ? parseFloat(expenseAmount) : 0;
+    const finalAmount = netAmount - expenseAmountValue;
+
+    return {
+      discountPercentage,
+      discountAmount,
+      paymentDiscountPercentage,
+      paymentDiscountAmount,
+      totalDiscountAmount,
+      netAmount,
+      expenseAmountValue,
+      finalAmount
+    };
   };
 
   const preview = previewCalculation();
+
+  const getPaymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      cash: 'Dinheiro',
+      debit_card: 'Débito',
+      credit_card: 'Crédito',
+      pix: 'PIX'
+    };
+    return labels[method] || method;
+  };
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -283,7 +364,7 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Categoria *
@@ -305,6 +386,23 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
+            Método de Entrada *
+          </label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'debit_card' | 'credit_card' | 'pix')}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            <option value="pix">PIX</option>
+            <option value="cash">Dinheiro</option>
+            <option value="debit_card">Débito (Desconto adicional: 1,7%)</option>
+            <option value="credit_card">Crédito (Desconto adicional: 2,5%)</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Valor de Entrada *
           </label>
           <input
@@ -316,6 +414,44 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
+        </div>
+      </div>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+        <h4 className="font-semibold text-gray-800 mb-3 text-sm">Saída (Opcional)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Categoria de Saída
+            </label>
+            <select
+              value={expenseCategory}
+              onChange={(e) => setExpenseCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Nenhuma</option>
+              {EXPENSE_CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Valor da Saída
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={expenseAmount}
+              onChange={(e) => setExpenseAmount(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!expenseCategory}
+            />
+          </div>
         </div>
       </div>
 
@@ -336,9 +472,19 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
           <h4 className="font-semibold text-blue-900 mb-2">Pré-visualização do Cálculo:</h4>
           <div className="space-y-1 text-sm text-blue-800">
-            <p>Valor de Entrada: <span className="font-semibold">R$ {preview.discountAmount + preview.netAmount}</span></p>
-            <p>Desconto (Nota Fiscal {preview.discountPercentage}%): <span className="font-semibold text-red-600">- R$ {preview.discountAmount.toFixed(2)}</span></p>
-            <p className="pt-2 border-t border-blue-300">Valor de Repasse: <span className="font-semibold text-green-600">R$ {preview.netAmount.toFixed(2)}</span></p>
+            <p>Valor de Entrada: <span className="font-semibold">R$ {parseFloat(amount).toFixed(2)}</span></p>
+            <p>Desconto Nota Fiscal ({preview.discountPercentage}%): <span className="font-semibold text-red-600">- R$ {preview.discountAmount.toFixed(2)}</span></p>
+            {preview.paymentDiscountPercentage > 0 && (
+              <p>Desconto {getPaymentMethodLabel(paymentMethod)} ({preview.paymentDiscountPercentage}%): <span className="font-semibold text-red-600">- R$ {preview.paymentDiscountAmount.toFixed(2)}</span></p>
+            )}
+            <p className="font-medium">Total de Descontos: <span className="font-semibold text-red-600">- R$ {preview.totalDiscountAmount.toFixed(2)}</span></p>
+            <p className="pt-2 border-t border-blue-300">Valor de Repasse Bruto: <span className="font-semibold text-green-600">R$ {preview.netAmount.toFixed(2)}</span></p>
+            {preview.expenseAmountValue > 0 && (
+              <>
+                <p>Saída ({EXPENSE_CATEGORIES.find(c => c.value === expenseCategory)?.label}): <span className="font-semibold text-orange-600">- R$ {preview.expenseAmountValue.toFixed(2)}</span></p>
+                <p className="pt-2 border-t border-blue-300 font-bold">Valor de Repasse Líquido: <span className="font-semibold text-green-700">R$ {preview.finalAmount.toFixed(2)}</span></p>
+              </>
+            )}
           </div>
         </div>
       )}
