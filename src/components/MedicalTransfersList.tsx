@@ -321,6 +321,11 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   };
 
   const handleAddExpense = async (doctorName: string) => {
+    if (!selectedMonth) {
+      alert('Por favor, selecione um mês de referência antes de lançar uma saída');
+      return;
+    }
+
     const form = expenseForm[doctorName];
     if (!form || !form.description || form.amount <= 0) {
       alert('Por favor, preencha todos os campos da saída');
@@ -344,7 +349,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           discount_percentage: 0,
           discount_amount: 0,
           net_amount: 0,
-          reference_month: selectedMonth || new Date().toISOString().slice(0, 7),
+          reference_month: selectedMonth,
           payment_method: 'cash',
           payment_discount_percentage: 0,
           payment_discount_amount: 0,
@@ -555,6 +560,13 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                         <td colSpan={4} className="py-4 px-4">
                           <div className="bg-white rounded-lg p-4 border border-blue-200">
                             <h4 className="text-sm font-semibold text-gray-700 mb-3">Lançar Saída para {stat.doctor}</h4>
+                            {!selectedMonth && (
+                              <div className="mb-3 p-2 bg-yellow-50 border border-yellow-300 rounded-md">
+                                <p className="text-xs text-yellow-800">
+                                  Selecione um mês de referência acima para lançar uma saída
+                                </p>
+                              </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                               <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Categoria</label>
@@ -620,7 +632,12 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                             <div className="mt-3 flex justify-end">
                               <button
                                 onClick={() => handleAddExpense(stat.doctor)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                                disabled={!selectedMonth}
+                                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                  selectedMonth
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                }`}
                               >
                                 Adicionar Saída
                               </button>
