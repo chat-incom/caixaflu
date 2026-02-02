@@ -71,6 +71,12 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
+  const [expandedDoctors, setExpandedDoctors] = useState<Set<string>>(new Set());
+  const [expenseForm, setExpenseForm] = useState<{[key: string]: {
+    description: string;
+    amount: number;
+    category: string;
+  }}>({});
 
   useEffect(() => {
     fetchTransfers();
@@ -291,6 +297,77 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
   };
 
+  const toggleDoctorExpansion = (doctorName: string) => {
+    const newExpanded = new Set(expandedDoctors);
+    if (newExpanded.has(doctorName)) {
+      newExpanded.delete(doctorName);
+    } else {
+      newExpanded.add(doctorName);
+      if (!expenseForm[doctorName]) {
+        setExpenseForm({
+          ...expenseForm,
+          [doctorName]: {
+            description: '',
+            amount: 0,
+            category: 'rateio_mensal'
+          }
+        });
+      }
+    }
+    setExpandedDoctors(newExpanded);
+  };
+
+  const handleAddExpense = async (doctorName: string) => {
+    const form = expenseForm[doctorName];
+    if (!form || !form.description || form.amount <= 0) {
+      alert('Por favor, preencha todos os campos da saída');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('medical_transfers')
+        .insert([{
+          user_id: user.id,
+          date: new Date().toISOString().split('T')[0],
+          doctor_name: doctorName,
+          option_type: 'expense',
+          category: 'Saída',
+          description: form.description,
+          amount: 0,
+          discount_percentage: 0,
+          discount_amount: 0,
+          net_amount: 0,
+          reference_month: selectedMonth || new Date().toISOString().slice(0, 7),
+          payment_method: 'cash',
+          payment_discount_percentage: 0,
+          payment_discount_amount: 0,
+          expense_category: form.category,
+          expense_amount: form.amount
+        }]);
+
+      if (error) throw error;
+
+      setExpenseForm({
+        ...expenseForm,
+        [doctorName]: {
+          description: '',
+          amount: 0,
+          category: 'rateio_mensal'
+        }
+      });
+
+      fetchTransfers();
+      alert('Saída lançada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao adicionar saída:', error);
+      alert('Erro ao adicionar saída');
+    }
+  };
+
   const getMonthlyStats = () => {
     const stats: { [key: string]: { total: number; count: number } } = {};
 
@@ -436,28 +513,111 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Médico</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Quantidade</th>
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Total de Repasse</th>
+                  <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {doctorStats.map((stat) => (
-                  <tr
-                    key={stat.doctor}
-                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelectedDoctor(stat.doctor === selectedDoctor ? '' : stat.doctor)}
-                  >
-                    <td className="py-3 px-4 text-sm font-medium text-gray-800">
-                      {stat.doctor}
-                      {selectedDoctor === stat.doctor && (
-                        <span className="ml-2 text-xs text-blue-600">(filtrado)</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-700 text-center">
-                      {stat.count} {stat.count === 1 ? 'repasse' : 'repasses'}
-                    </td>
-                    <td className="py-3 px-4 text-sm font-semibold text-green-600 text-right">
-                      R$ {stat.total.toFixed(2)}
-                    </td>
-                  </tr>
+                  <>
+                    <tr
+                      key={stat.doctor}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td
+                        className="py-3 px-4 text-sm font-medium text-gray-800 cursor-pointer"
+                        onClick={() => setSelectedDoctor(stat.doctor === selectedDoctor ? '' : stat.doctor)}
+                      >
+                        {stat.doctor}
+                        {selectedDoctor === stat.doctor && (
+                          <span className="ml-2 text-xs text-blue-600">(filtrado)</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-700 text-center">
+                        {stat.count} {stat.count === 1 ? 'repasse' : 'repasses'}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-semibold text-green-600 text-right">
+                        R$ {stat.total.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => toggleDoctorExpansion(stat.doctor)}
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          {expandedDoctors.has(stat.doctor) ? 'Fechar' : 'Ver mais'}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedDoctors.has(stat.doctor) && (
+                      <tr key={`${stat.doctor}-expense`} className="bg-blue-50">
+                        <td colSpan={4} className="py-4 px-4">
+                          <div className="bg-white rounded-lg p-4 border border-blue-200">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">Lançar Saída para {stat.doctor}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Categoria</label>
+                                <select
+                                  value={expenseForm[stat.doctor]?.category || 'rateio_mensal'}
+                                  onChange={(e) => setExpenseForm({
+                                    ...expenseForm,
+                                    [stat.doctor]: {
+                                      ...expenseForm[stat.doctor],
+                                      category: e.target.value
+                                    }
+                                  })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  {EXPENSE_CATEGORIES.map(cat => (
+                                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Descrição</label>
+                                <input
+                                  type="text"
+                                  value={expenseForm[stat.doctor]?.description || ''}
+                                  onChange={(e) => setExpenseForm({
+                                    ...expenseForm,
+                                    [stat.doctor]: {
+                                      ...expenseForm[stat.doctor],
+                                      description: e.target.value
+                                    }
+                                  })}
+                                  placeholder="Descrição da saída"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Valor</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={expenseForm[stat.doctor]?.amount || ''}
+                                  onChange={(e) => setExpenseForm({
+                                    ...expenseForm,
+                                    [stat.doctor]: {
+                                      ...expenseForm[stat.doctor],
+                                      amount: parseFloat(e.target.value) || 0
+                                    }
+                                  })}
+                                  placeholder="0.00"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                onClick={() => handleAddExpense(stat.doctor)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                              >
+                                Adicionar Saída
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
