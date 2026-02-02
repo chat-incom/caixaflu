@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus } from 'lucide-react';
 
@@ -42,6 +42,56 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [doctorName, setDoctorName] = useState('');
+  const [referenceMonth, setReferenceMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
+  const [newDoctorName, setNewDoctorName] = useState('');
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
+  const fetchDoctors = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: transactionsData } = await supabase
+        .from('transactions')
+        .select('subcategory')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .eq('category', 'repasse_medico')
+        .not('subcategory', 'is', null);
+
+      const { data: transfersData } = await supabase
+        .from('medical_transfers')
+        .select('doctor_name')
+        .eq('user_id', user.id)
+        .not('doctor_name', 'is', null);
+
+      const doctors = new Set<string>();
+
+      transactionsData?.forEach(t => {
+        if (t.subcategory && t.subcategory.trim()) {
+          doctors.add(t.subcategory.trim());
+        }
+      });
+
+      transfersData?.forEach(t => {
+        if (t.doctor_name && t.doctor_name.trim()) {
+          doctors.add(t.doctor_name.trim());
+        }
+      });
+
+      setAvailableDoctors(Array.from(doctors).sort());
+    } catch (error) {
+      console.error('Erro ao buscar médicos:', error);
+    }
+  };
 
   const getCurrentCategories = () => {
     switch (optionType) {
@@ -79,7 +129,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!category || !amount) {
+    const finalDoctorName = doctorName === 'new' ? newDoctorName : doctorName;
+
+    if (!category || !amount || !finalDoctorName || !referenceMonth) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
@@ -105,7 +157,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
             amount: amountValue,
             discount_percentage: discountPercentage,
             discount_amount: discountAmount,
-            net_amount: netAmount
+            net_amount: netAmount,
+            doctor_name: finalDoctorName,
+            reference_month: referenceMonth
           }
         ]);
 
@@ -114,6 +168,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
       setCategory('');
       setDescription('');
       setAmount('');
+      setDoctorName('');
+      setNewDoctorName('');
+      fetchDoctors();
       onTransferAdded();
     } catch (error) {
       console.error('Erro ao adicionar repasse:', error);
@@ -137,10 +194,10 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
       <h3 className="text-xl font-semibold mb-4 text-gray-800">Novo Repasse Médico</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Data
+            Data *
           </label>
           <input
             type="date"
@@ -153,7 +210,20 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo de Opção
+            Mês de Referência *
+          </label>
+          <input
+            type="month"
+            value={referenceMonth}
+            onChange={(e) => setReferenceMonth(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Tipo de Opção *
           </label>
           <select
             value={optionType}
@@ -168,6 +238,49 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
             <option value="option3">Opção 3 - Hospital (Desconto: 10,93%)</option>
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Médico *
+          </label>
+          <select
+            value={doctorName}
+            onChange={(e) => {
+              setDoctorName(e.target.value);
+              if (e.target.value !== 'new') {
+                setNewDoctorName('');
+              }
+            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            <option value="">Selecione um médico</option>
+            {availableDoctors.map((doctor) => (
+              <option key={doctor} value={doctor}>
+                {doctor}
+              </option>
+            ))}
+            <option value="new">+ Adicionar novo médico</option>
+          </select>
+        </div>
+
+        {doctorName === 'new' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nome do Novo Médico *
+            </label>
+            <input
+              type="text"
+              value={newDoctorName}
+              onChange={(e) => setNewDoctorName(e.target.value)}
+              placeholder="Digite o nome do médico"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

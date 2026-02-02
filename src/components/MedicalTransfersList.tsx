@@ -12,6 +12,8 @@ interface MedicalTransfer {
   discount_percentage: number;
   discount_amount: number;
   net_amount: number;
+  doctor_name: string;
+  reference_month: string;
 }
 
 interface MedicalTransfersListProps {
@@ -53,6 +55,8 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<MedicalTransfer>>({});
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
 
   useEffect(() => {
     fetchTransfers();
@@ -67,10 +71,19 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
         .from('medical_transfers')
         .select('*')
         .eq('user_id', user.id)
+        .order('reference_month', { ascending: false })
         .order('date', { ascending: false });
 
       if (error) throw error;
       setTransfers(data || []);
+
+      const doctors = new Set<string>();
+      data?.forEach(t => {
+        if (t.doctor_name) {
+          doctors.add(t.doctor_name);
+        }
+      });
+      setAvailableDoctors(Array.from(doctors).sort());
     } catch (error) {
       console.error('Erro ao buscar repasses:', error);
     } finally {
@@ -102,7 +115,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       option_type: transfer.option_type,
       category: transfer.category,
       description: transfer.description,
-      amount: transfer.amount
+      amount: transfer.amount,
+      doctor_name: transfer.doctor_name,
+      reference_month: transfer.reference_month
     });
   };
 
@@ -145,7 +160,10 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   };
 
   const saveEdit = async () => {
-    if (!editingId || !editForm.amount || !editForm.category) return;
+    if (!editingId || !editForm.amount || !editForm.category || !editForm.doctor_name || !editForm.reference_month) {
+      alert('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
 
     try {
       const amountValue = editForm.amount;
@@ -162,7 +180,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           amount: amountValue,
           discount_percentage: discountPercentage,
           discount_amount: discountAmount,
-          net_amount: netAmount
+          net_amount: netAmount,
+          doctor_name: editForm.doctor_name,
+          reference_month: editForm.reference_month
         })
         .eq('id', editingId);
 
@@ -199,7 +219,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     const stats: { [key: string]: { total: number; count: number } } = {};
 
     transfers.forEach((transfer) => {
-      const monthKey = transfer.date.substring(0, 7);
+      const monthKey = transfer.reference_month || transfer.date.substring(0, 7);
       if (!stats[monthKey]) {
         stats[monthKey] = { total: 0, count: 0 };
       }
@@ -212,11 +232,39 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       .sort((a, b) => b.month.localeCompare(a.month));
   };
 
-  const monthlyStats = getMonthlyStats();
+  const getDoctorStats = () => {
+    const stats: { [key: string]: { total: number; count: number } } = {};
 
-  const filteredTransfers = selectedMonth
-    ? transfers.filter((t) => t.date.startsWith(selectedMonth))
-    : transfers;
+    const filtered = selectedMonth
+      ? transfers.filter((t) => (t.reference_month || t.date.substring(0, 7)) === selectedMonth)
+      : transfers;
+
+    filtered.forEach((transfer) => {
+      const doctor = transfer.doctor_name || 'Sem médico';
+      if (!stats[doctor]) {
+        stats[doctor] = { total: 0, count: 0 };
+      }
+      stats[doctor].total += transfer.net_amount;
+      stats[doctor].count += 1;
+    });
+
+    return Object.entries(stats)
+      .map(([doctor, data]) => ({ doctor, ...data }))
+      .sort((a, b) => b.total - a.total);
+  };
+
+  const monthlyStats = getMonthlyStats();
+  const doctorStats = getDoctorStats();
+
+  const filteredTransfers = transfers.filter((t) => {
+    const matchMonth = selectedMonth
+      ? (t.reference_month || t.date.substring(0, 7)) === selectedMonth
+      : true;
+    const matchDoctor = selectedDoctor
+      ? t.doctor_name === selectedDoctor
+      : true;
+    return matchMonth && matchDoctor;
+  });
 
   const totalRepasse = filteredTransfers.reduce((sum, t) => sum + t.net_amount, 0);
   const totalEntrada = filteredTransfers.reduce((sum, t) => sum + t.amount, 0);
@@ -233,21 +281,43 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   return (
     <div>
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h3 className="text-xl font-semibold mb-4 text-gray-800">Resumo por Mês</h3>
+        <h3 className="text-xl font-semibold mb-4 text-gray-800">Filtros e Resumo</h3>
 
-        <div className="mb-4">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Todos os meses</option>
-            {monthlyStats.map((stat) => (
-              <option key={stat.month} value={stat.month}>
-                {new Date(stat.month + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mês de Referência</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setSelectedDoctor('');
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos os meses</option>
+              {monthlyStats.map((stat) => (
+                <option key={stat.month} value={stat.month}>
+                  {new Date(stat.month + '-01').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Médico</label>
+            <select
+              value={selectedDoctor}
+              onChange={(e) => setSelectedDoctor(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos os médicos</option>
+              {availableDoctors.map((doctor) => (
+                <option key={doctor} value={doctor}>
+                  {doctor}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -270,6 +340,45 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
         </div>
       </div>
 
+      {doctorStats.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h3 className="text-xl font-semibold mb-4 text-gray-800">Detalhamento por Médico</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Médico</th>
+                  <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Quantidade</th>
+                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Total de Repasse</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doctorStats.map((stat) => (
+                  <tr
+                    key={stat.doctor}
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelectedDoctor(stat.doctor === selectedDoctor ? '' : stat.doctor)}
+                  >
+                    <td className="py-3 px-4 text-sm font-medium text-gray-800">
+                      {stat.doctor}
+                      {selectedDoctor === stat.doctor && (
+                        <span className="ml-2 text-xs text-blue-600">(filtrado)</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-700 text-center">
+                      {stat.count} {stat.count === 1 ? 'repasse' : 'repasses'}
+                    </td>
+                    <td className="py-3 px-4 text-sm font-semibold text-green-600 text-right">
+                      R$ {stat.total.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-xl font-semibold mb-4 text-gray-800">Lista de Repasses</h3>
 
@@ -281,6 +390,8 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Data</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Mês Ref.</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Médico</th>
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Opção</th>
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Categoria</th>
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Descrição</th>
@@ -302,6 +413,26 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                             onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
                             className="w-full px-2 py-1 border rounded text-sm"
                           />
+                        </td>
+                        <td className="py-3 px-2">
+                          <input
+                            type="month"
+                            value={editForm.reference_month}
+                            onChange={(e) => setEditForm({ ...editForm, reference_month: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          />
+                        </td>
+                        <td className="py-3 px-2">
+                          <select
+                            value={editForm.doctor_name}
+                            onChange={(e) => setEditForm({ ...editForm, doctor_name: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          >
+                            <option value="">Selecione</option>
+                            {availableDoctors.map((doctor) => (
+                              <option key={doctor} value={doctor}>{doctor}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="py-3 px-2">
                           <select
@@ -368,6 +499,10 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                     ) : (
                       <>
                         <td className="py-3 px-2 text-sm text-gray-700">{formatDate(transfer.date)}</td>
+                        <td className="py-3 px-2 text-sm text-gray-700">
+                          {transfer.reference_month ? new Date(transfer.reference_month + '-01').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '-'}
+                        </td>
+                        <td className="py-3 px-2 text-sm font-medium text-gray-800">{transfer.doctor_name || '-'}</td>
                         <td className="py-3 px-2 text-sm text-gray-700">{getOptionLabel(transfer.option_type)}</td>
                         <td className="py-3 px-2 text-sm text-gray-700">{transfer.category}</td>
                         <td className="py-3 px-2 text-sm text-gray-600">{transfer.description || '-'}</td>
