@@ -7,6 +7,8 @@ import { EditInitialBalanceModal } from './EditInitialBalanceModal';
 import { EditTransactionModal } from './EditTransactionModal';
 import { Logo } from './Logo';
 import { Transaction } from '../lib/supabase';
+import MedicalTransferForm from './MedicalTransferForm';
+import MedicalTransfersList from './MedicalTransfersList';
 import {
   Plus,
   LogOut,
@@ -19,6 +21,7 @@ import {
   FileText,
   Edit3,
   Edit2,
+  Activity,
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -30,6 +33,8 @@ export function Dashboard() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'month' | 'week'>('month');
+  const [activeTab, setActiveTab] = useState<'cashflow' | 'medical'>('cashflow');
+  const [medicalTransfersRefresh, setMedicalTransfersRefresh] = useState(0);
 
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
@@ -229,7 +234,42 @@ export function Dashboard() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="flex gap-2 mb-6 border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('cashflow')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition relative ${
+                activeTab === 'cashflow'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Wallet size={20} />
+              <span>Fluxo de Caixa</span>
+              {activeTab === 'cashflow' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('medical')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition relative ${
+                activeTab === 'medical'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Activity size={20} />
+              <span>Repasse Médico</span>
+              {activeTab === 'medical' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'cashflow' && (
+          <>
+            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium opacity-90">Saldo Atual</span>
@@ -365,10 +405,10 @@ export function Dashboard() {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setPeriodFilter('week')}
@@ -534,9 +574,22 @@ export function Dashboard() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+          </>
+        )}
+
+        {activeTab === 'medical' && (
+          <>
+            <MedicalTransferForm
+              onTransferAdded={() => setMedicalTransfersRefresh(prev => prev + 1)}
+            />
+            <MedicalTransfersList
+              refreshTrigger={medicalTransfersRefresh}
+            />
+          </>
+        )}
       </div>
 
       {showTransactionForm && (
