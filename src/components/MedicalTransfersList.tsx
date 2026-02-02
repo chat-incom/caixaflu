@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Trash2, Edit2, X, Save } from 'lucide-react';
+import { DoctorDetailsModal } from './DoctorDetailsModal';
 
 interface MedicalTransfer {
   id: string;
@@ -77,6 +78,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     amount: number;
     category: string;
   }}>({});
+  const [doctorDetailsModal, setDoctorDetailsModal] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTransfers();
@@ -544,12 +546,20 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                         R$ {stat.total.toFixed(2)}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => toggleDoctorExpansion(stat.doctor)}
-                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          {expandedDoctors.has(stat.doctor) ? 'Fechar' : 'Ver mais'}
-                        </button>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => setDoctorDetailsModal(stat.doctor)}
+                            className="text-sm text-green-600 hover:text-green-800 font-medium"
+                          >
+                            Detalhes
+                          </button>
+                          <button
+                            onClick={() => toggleDoctorExpansion(stat.doctor)}
+                            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            {expandedDoctors.has(stat.doctor) ? 'Fechar' : 'Ver mais'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {expandedDoctors.has(stat.doctor) && (
@@ -866,6 +876,15 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           </div>
         )}
       </div>
+
+      {doctorDetailsModal && (
+        <DoctorDetailsModal
+          doctorName={doctorDetailsModal}
+          transfers={transfers}
+          selectedMonth={selectedMonth}
+          onClose={() => setDoctorDetailsModal(null)}
+        />
+      )}
     </div>
   );
 }
