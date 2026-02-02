@@ -321,16 +321,13 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   };
 
   const handleAddExpense = async (doctorName: string) => {
-    if (!selectedMonth) {
-      alert('Por favor, selecione um mês de referência antes de lançar uma saída');
-      return;
-    }
-
     const form = expenseForm[doctorName];
     if (!form || !form.description || form.amount <= 0) {
       alert('Por favor, preencha todos os campos da saída');
       return;
     }
+
+    const referenceMonth = selectedMonth || new Date().toISOString().slice(0, 7);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -349,7 +346,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           discount_percentage: 0,
           discount_amount: 0,
           net_amount: 0,
-          reference_month: selectedMonth,
+          reference_month: referenceMonth,
           payment_method: 'cash',
           payment_discount_percentage: 0,
           payment_discount_amount: 0,
@@ -561,9 +558,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                           <div className="bg-white rounded-lg p-4 border border-blue-200">
                             <h4 className="text-sm font-semibold text-gray-700 mb-3">Lançar Saída para {stat.doctor}</h4>
                             {!selectedMonth && (
-                              <div className="mb-3 p-2 bg-yellow-50 border border-yellow-300 rounded-md">
-                                <p className="text-xs text-yellow-800">
-                                  Selecione um mês de referência acima para lançar uma saída
+                              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                                <p className="text-xs text-blue-700">
+                                  A saída será registrada no mês atual ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })})
                                 </p>
                               </div>
                             )}
@@ -632,12 +629,7 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                             <div className="mt-3 flex justify-end">
                               <button
                                 onClick={() => handleAddExpense(stat.doctor)}
-                                disabled={!selectedMonth}
-                                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                  selectedMonth
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                }`}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
                               >
                                 Adicionar Saída
                               </button>
