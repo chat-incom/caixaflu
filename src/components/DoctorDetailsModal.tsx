@@ -1,5 +1,6 @@
-import { X, TrendingUp, TrendingDown, User } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, User, FileDown } from 'lucide-react';
 import { useMemo } from 'react';
+import jsPDF from 'jspdf';
 
 interface MedicalTransfer {
   id: string;
@@ -121,6 +122,151 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     credit_card: 'Cartão de Crédito'
   };
 
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let yPosition = 20;
+
+    // Título
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detalhamento de Repasses Medicos', pageWidth / 2, yPosition, { align: 'center' });
+
+    yPosition += 10;
+    doc.setFontSize(14);
+    doc.text(`Medico: ${doctorName}`, pageWidth / 2, yPosition, { align: 'center' });
+
+    if (selectedMonth) {
+      yPosition += 8;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Periodo: ${formatMonth(selectedMonth)}`, pageWidth / 2, yPosition, { align: 'center' });
+    }
+
+    // Linha divisória
+    yPosition += 10;
+    doc.setLineWidth(0.5);
+    doc.line(15, yPosition, pageWidth - 15, yPosition);
+
+    // Resumo Financeiro
+    yPosition += 10;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Resumo Financeiro', 15, yPosition);
+
+    yPosition += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Total de Entradas: ${formatCurrency(totals.income)} (${incomeTransfers.length} transacoes)`, 20, yPosition);
+
+    yPosition += 6;
+    doc.text(`Total de Saidas: ${formatCurrency(totals.expense)} (${expenseTransfers.length} transacoes)`, 20, yPosition);
+
+    yPosition += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Saldo Liquido: ${formatCurrency(totals.balance)}`, 20, yPosition);
+
+    // Entradas Detalhadas
+    if (Object.keys(incomesByType).length > 0) {
+      yPosition += 12;
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Entradas Detalhadas', 15, yPosition);
+
+      Object.entries(incomesByType).forEach(([type, data]) => {
+        yPosition += 8;
+
+        // Verifica se precisa de nova página
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${optionTypeLabels[type] || type}: ${formatCurrency(data.total)}`, 20, yPosition);
+
+        yPosition += 6;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Valor Bruto: ${formatCurrency(data.totalGross)} | Descontos: ${formatCurrency(data.totalDiscounts)}`, 25, yPosition);
+
+        data.transactions.forEach((t) => {
+          yPosition += 6;
+
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+
+          doc.setFontSize(8);
+          const dateStr = formatDate(t.date);
+          const description = t.description || '-';
+          doc.text(`- ${dateStr} | ${description}`, 30, yPosition);
+
+          yPosition += 4;
+          doc.text(`  ${t.category} | ${paymentMethodLabels[t.payment_method]} | ${formatCurrency(t.net_amount)}`, 30, yPosition);
+        });
+      });
+    }
+
+    // Saídas Detalhadas
+    if (Object.keys(expensesByCategory).length > 0) {
+      yPosition += 12;
+
+      if (yPosition > 250) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Saidas Detalhadas', 15, yPosition);
+
+      Object.entries(expensesByCategory).forEach(([category, data]) => {
+        yPosition += 8;
+
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${expenseCategoryLabels[category] || category}: ${formatCurrency(data.total)}`, 20, yPosition);
+
+        data.transactions.forEach((t) => {
+          yPosition += 6;
+
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          const dateStr = formatDate(t.date);
+          const description = t.description || '-';
+          doc.text(`- ${dateStr} | ${description} | ${formatCurrency(t.expense_amount)}`, 30, yPosition);
+        });
+      });
+    }
+
+    // Rodapé
+    const pageCount = doc.getNumberOfPages();
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.text(`Pagina ${i} de ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 15, doc.internal.pageSize.getHeight() - 10);
+    }
+
+    // Salvar PDF
+    const fileName = `Repasse_${doctorName.replace(/\s+/g, '_')}_${selectedMonth || 'Todos'}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -135,12 +281,22 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generatePDF}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-medium"
+              title="Gerar PDF"
+            >
+              <FileDown size={20} />
+              Gerar PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
