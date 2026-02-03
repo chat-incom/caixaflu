@@ -403,29 +403,23 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     credit_card: <CreditCard size={14} />
   };
 
-  const generatePDF = () => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
+ const generatePDF = () => {
+  // Configurar PDF em modo paisagem (landscape)
+  const doc = new jsPDF('landscape');
+  const pageWidth = doc.internal.pageSize.getWidth(); // 297mm em paisagem
+  const pageHeight = doc.internal.pageSize.getHeight(); // 210mm em paisagem
+  const margin = 20;
   const lineHeight = 6;
   let yPosition = margin;
 
   // Função para verificar se precisa de nova página
   const checkPageBreak = (neededSpace: number) => {
     if (yPosition + neededSpace > pageHeight - margin) {
-      doc.addPage();
+      doc.addPage('landscape');
       yPosition = margin;
       return true;
     }
     return false;
-  };
-
-  // Função para adicionar texto com quebra de linha automática
-  const addTextWithWrap = (text: string, x: number, y: number, maxWidth: number) => {
-    const lines = doc.splitTextToSize(text, maxWidth);
-    doc.text(lines, x, y);
-    return lines.length * lineHeight;
   };
 
   // Título
@@ -449,43 +443,52 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   doc.text(periodText, pageWidth / 2, yPosition, { align: 'center' });
   yPosition += 15;
 
-  // Resumo financeiro detalhado
+  // Seção de Resumo Financeiro com layout lado a lado
   checkPageBreak(30);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('RESUMO FINANCEIRO', margin, yPosition);
   yPosition += 8;
 
+  // Primeira coluna (esquerda)
+  const firstColumnX = margin;
+  const secondColumnX = pageWidth / 2;
+  
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text(`Valor Bruto Total: ${formatCurrency(totals.grossIncome)}`, margin + 5, yPosition);
+  
+  // Coluna esquerda
+  doc.text(`Valor Bruto Total: ${formatCurrency(totals.grossIncome)}`, firstColumnX, yPosition);
   yPosition += lineHeight;
-  doc.text(`Total de Descontos: -${formatCurrency(totals.totalDiscounts)}`, margin + 5, yPosition);
+  doc.text(`Total de Descontos: -${formatCurrency(totals.totalDiscounts)}`, firstColumnX, yPosition);
   yPosition += lineHeight;
-  doc.text(`Entradas Líquidas: ${formatCurrency(totals.income)} (${incomeTransfers.length} repasses)`, margin + 5, yPosition);
+  doc.text(`Entradas Líquidas: ${formatCurrency(totals.income)} (${incomeTransfers.length} repasses)`, firstColumnX, yPosition);
   yPosition += lineHeight;
-  doc.text(`Despesas de Repasses: -${formatCurrency(totals.transferExpenses)} (${transferExpenses.length} transações)`, margin + 5, yPosition);
-  yPosition += lineHeight;
-  doc.text(`Despesas Independentes: -${formatCurrency(totals.independentExpenses)} (${independentExpenseDetails.length} transações)`, margin + 5, yPosition);
-  yPosition += lineHeight;
+  doc.text(`Despesas de Repasses: -${formatCurrency(totals.transferExpenses)} (${transferExpenses.length})`, firstColumnX, yPosition);
+  
+  // Coluna direita
+  const rightColumnY = yPosition - (3 * lineHeight);
+  doc.text(`Despesas Independentes: -${formatCurrency(totals.independentExpenses)} (${independentExpenseDetails.length})`, secondColumnX, rightColumnY);
+  doc.text(`Total de Despesas: -${formatCurrency(totals.totalExpenses)} (${allExpenses.length})`, secondColumnX, rightColumnY + lineHeight);
+  
   doc.setFont('helvetica', 'bold');
-  doc.text(`Total de Despesas: -${formatCurrency(totals.totalExpenses)} (${allExpenses.length} transações)`, margin + 5, yPosition);
-  yPosition += lineHeight;
   doc.setFontSize(11);
-  doc.text(`SALDO FINAL: ${formatCurrency(totals.balance)}`, margin + 5, yPosition);
+  doc.text(`SALDO FINAL: ${formatCurrency(totals.balance)}`, secondColumnX, rightColumnY + (2 * lineHeight));
+  
+  yPosition += lineHeight * 2;
   yPosition += 15;
 
-  // Entradas por tipo com colunas ajustadas
+  // Entradas por tipo com colunas mais largas (paisagem)
   if (incomeTransfers.length > 0) {
-    checkPageBreak(20);
+    checkPageBreak(25);
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('ENTRADAS POR TIPO DE PROCEDIMENTO', margin, yPosition);
-    yPosition += 8;
+    yPosition += 10;
     
-    // Configurar larguras das colunas
-    const colWidths = [60, 15, 30, 35, 40, 40]; // Ajustado para caber em A4
+    // Configurar larguras das colunas para paisagem
+    const colWidths = [80, 20, 45, 45, 50, 45]; // Mais espaço em paisagem
     const colPositions = [
       margin,
       margin + colWidths[0],
@@ -498,30 +501,29 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     // Cabeçalho da tabela
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Tipo', colPositions[0], yPosition);
-    doc.text('Qtd', colPositions[1], yPosition);
-    doc.text('Bruto', colPositions[2], yPosition);
-    doc.text('Descontos', colPositions[3], yPosition);
-    doc.text('Desp.Assoc.', colPositions[4], yPosition);
-    doc.text('Líquido', colPositions[5], yPosition);
+    doc.text('TIPO DE PROCEDIMENTO', colPositions[0], yPosition);
+    doc.text('QTD', colPositions[1], yPosition);
+    doc.text('VALOR BRUTO', colPositions[2], yPosition);
+    doc.text('DESCONTOS', colPositions[3], yPosition);
+    doc.text('DESP. ASSOCIADAS', colPositions[4], yPosition);
+    doc.text('VALOR LÍQUIDO', colPositions[5], yPosition);
     
-    yPosition += 6;
+    yPosition += 8;
     doc.setLineWidth(0.2);
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 4;
+    yPosition += 6;
     
     // Conteúdo da tabela
     doc.setFont('helvetica', 'normal');
     Object.entries(incomesByType).forEach(([type, data]) => {
       checkPageBreak(10);
       
-      // Tipo (abreviado se necessário)
+      // Tipo completo (mais espaço em paisagem)
       const typeLabel = optionTypeLabels[type] || type;
-      const shortType = typeLabel.length > 25 ? typeLabel.substring(0, 25) + '...' : typeLabel;
-      doc.text(shortType, colPositions[0], yPosition);
+      doc.text(typeLabel, colPositions[0], yPosition);
       
       // Qtd
-      doc.text(data.count.toString(), colPositions[1] + 2, yPosition);
+      doc.text(data.count.toString(), colPositions[1] + 5, yPosition, { align: 'center' });
       
       // Bruto
       doc.text(formatCurrency(data.totalGross), colPositions[2], yPosition);
@@ -535,107 +537,119 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       // Líquido
       doc.text(formatCurrency(data.netTotal), colPositions[5], yPosition);
       
-      yPosition += 8;
+      yPosition += 10;
     });
     
-    yPosition += 10;
+    yPosition += 15;
   }
 
-  // Tabela de Despesas por Categoria (ajustada)
+  // Tabela de Despesas por Categoria (mais espaçosa em paisagem)
   if (allExpenses.length > 0) {
-    checkPageBreak(20);
+    checkPageBreak(30);
     
+    // Usar layout de duas colunas lado a lado para despesas
+    const leftSectionWidth = (pageWidth - (3 * margin)) / 2;
+    const rightSectionX = margin + leftSectionWidth + margin;
+    
+    // Título
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('DESPESAS POR CATEGORIA', margin, yPosition);
-    yPosition += 8;
+    yPosition += 10;
     
-    // Configurações de coluna para caber em A4
-    const expenseColWidths = [40, 45, 20, 30]; // Categoria, Origem, Qtd, Total
-    const expenseColPositions = [
-      margin,
-      margin + expenseColWidths[0],
-      margin + expenseColWidths[0] + expenseColWidths[1],
-      margin + expenseColWidths[0] + expenseColWidths[1] + expenseColWidths[2]
-    ];
+    // Configurações de coluna para cada seção
+    const categoryColWidths = [60, 30, 40]; // Categoria, Qtd, Total
+    const detailColWidths = [100, 40]; // Descrição, Valor
     
-    // Cabeçalho
+    // Cabeçalho da seção de resumo
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Categoria', expenseColPositions[0], yPosition);
-    doc.text('Origem', expenseColPositions[1], yPosition);
-    doc.text('Qtd', expenseColPositions[2], yPosition);
-    doc.text('Total', expenseColPositions[3], yPosition);
-    
+    doc.text('RESUMO POR CATEGORIA', margin, yPosition);
     yPosition += 6;
-    doc.setLineWidth(0.2);
-    doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 4;
     
+    // Linha divisória
+    doc.setLineWidth(0.1);
+    doc.line(margin, yPosition, margin + leftSectionWidth, yPosition);
+    yPosition += 6;
+    
+    // Conteúdo do resumo por categoria
     doc.setFont('helvetica', 'normal');
     Object.entries(expensesByCategory).forEach(([category, data]) => {
-      checkPageBreak(15);
+      checkPageBreak(8);
       
-      // Categoria (abreviada se necessário)
+      const categoryY = yPosition;
+      
+      // Categoria
       const categoryLabel = expenseCategoryLabels[category] || category;
-      const shortCategory = categoryLabel.length > 18 ? categoryLabel.substring(0, 18) + '...' : categoryLabel;
-      doc.text(shortCategory, expenseColPositions[0], yPosition);
+      doc.text(categoryLabel, margin, categoryY);
       
-      // Origem (comprimida)
-      const origins = [];
-      if (data.transferCount > 0) origins.push(`${data.transferCount}R`);
-      if (data.independentCount > 0) origins.push(`${data.independentCount}I`);
-      const originText = origins.join('+');
-      doc.text(originText, expenseColPositions[1] + 5, yPosition);
-      
-      // Quantidade
-      doc.text(data.count.toString(), expenseColPositions[2] + 3, yPosition);
+      // Quantidade com origem
+      const qtdText = `${data.count} (${data.transferCount}R/${data.independentCount}I)`;
+      doc.text(qtdText, margin + categoryColWidths[0], categoryY);
       
       // Total
-      doc.text(formatCurrency(data.total), expenseColPositions[3], yPosition);
+      doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
       
       yPosition += 8;
-      
-      // Detalhes apenas se houver espaço
-      if (data.transactions.length > 0) {
-        doc.setFontSize(8);
-        const spaceForDetails = checkPageBreak(20) ? 0 : 20;
-        if (spaceForDetails > 0) {
-          data.transactions.slice(0, 2).forEach((expense) => {
-            if (yPosition + 6 > pageHeight - margin) return;
-            
-            const prefix = expense.source === 'medical_transfer' ? 'R:' : 'I:';
-            const desc = expense.description.length > 25 ? 
-              expense.description.substring(0, 25) + '...' : expense.description;
-            
-            doc.text(`${prefix} ${desc}`, margin + 5, yPosition);
-            doc.text(formatCurrency(expense.amount), expenseColPositions[3], yPosition);
-            yPosition += 5;
-          });
-          
-          if (data.transactions.length > 2) {
-            doc.text(`... +${data.transactions.length - 2}`, margin + 5, yPosition);
-            yPosition += 5;
-          }
-        }
-        doc.setFontSize(10);
+    });
+    
+    // Resetar Y para detalhes à direita
+    yPosition = margin + 40; // Posição inicial para detalhes
+    
+    // Título da seção de detalhes
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALHES DAS DESPESAS', rightSectionX, yPosition);
+    yPosition += 8;
+    
+    // Linha divisória
+    doc.line(rightSectionX, yPosition, pageWidth - margin, yPosition);
+    yPosition += 6;
+    
+    // Detalhes das despesas
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    
+    // Agrupar todas as despesas por tipo
+    const allExpensesList = allExpenses.slice(0, 15); // Limitar para caber
+    
+    allExpensesList.forEach((expense, index) => {
+      if (yPosition + 8 > pageHeight - margin) {
+        // Se não couber nesta página, criar nova página
+        doc.addPage('landscape');
+        yPosition = margin + 20;
+        doc.setFontSize(9);
       }
       
-      yPosition += 2;
+      const prefix = expense.source === 'medical_transfer' ? '🔄' : '💳';
+      const sourceAbbr = expense.source === 'medical_transfer' ? '(R)' : '(I)';
+      const desc = expense.description.length > 40 ? 
+        expense.description.substring(0, 40) + '...' : expense.description;
+      
+      doc.text(`${prefix} ${desc} ${sourceAbbr}`, rightSectionX, yPosition);
+      doc.text(formatCurrency(expense.amount), rightSectionX + detailColWidths[0], yPosition);
+      
+      yPosition += 7;
     });
+    
+    if (allExpenses.length > 15) {
+      doc.text(`... e mais ${allExpenses.length - 15} despesas`, rightSectionX, yPosition);
+      yPosition += 7;
+    }
+    
+    yPosition = Math.max(yPosition, margin + 40 + (Object.keys(expensesByCategory).length * 8) + 20);
   }
 
-  // Detalhamento por Mês (com colunas ajustadas)
+  // Detalhamento por Mês com tabela completa
   if (monthlyBreakdown.length > 0) {
-    checkPageBreak(30);
+    checkPageBreak(40);
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('DETALHAMENTO POR MÊS', margin, yPosition);
-    yPosition += 8;
+    yPosition += 10;
     
-    // Colunas ajustadas para A4
-    const monthColWidths = [30, 35, 30, 30, 35, 35]; // Mês, Entradas, Desp.R, Desp.I, Total, Saldo
+    // Colunas ajustadas para paisagem
+    const monthColWidths = [40, 55, 45, 45, 50, 50]; // Mais espaço em paisagem
     const monthColPositions = [
       margin,
       margin + monthColWidths[0],
@@ -645,38 +659,36 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       margin + monthColWidths[0] + monthColWidths[1] + monthColWidths[2] + monthColWidths[3] + monthColWidths[4]
     ];
     
-    // Cabeçalho
-    doc.setFontSize(9); // Fonte menor para cabeçalho
+    // Cabeçalho completo
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Mês', monthColPositions[0], yPosition);
-    doc.text('Entradas', monthColPositions[1], yPosition);
-    doc.text('Desp.R', monthColPositions[2], yPosition);
-    doc.text('Desp.I', monthColPositions[3], yPosition);
-    doc.text('Total', monthColPositions[4], yPosition);
-    doc.text('Saldo', monthColPositions[5], yPosition);
+    doc.text('MÊS', monthColPositions[0], yPosition);
+    doc.text('ENTRADAS LÍQUIDAS', monthColPositions[1], yPosition);
+    doc.text('DESP. REPASSES', monthColPositions[2], yPosition);
+    doc.text('DESP. INDEP.', monthColPositions[3], yPosition);
+    doc.text('TOTAL DESPESAS', monthColPositions[4], yPosition);
+    doc.text('SALDO FINAL', monthColPositions[5], yPosition);
     
-    yPosition += 5;
-    doc.setLineWidth(0.1);
+    yPosition += 8;
+    doc.setLineWidth(0.2);
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 4;
+    yPosition += 6;
     
     // Conteúdo
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9); // Fonte menor para conteúdo
     monthlyBreakdown.forEach(({ month, incomes, transferExpenses, independentExpenses, totalExpenses, balance, incomeCount }) => {
-      checkPageBreak(8);
+      checkPageBreak(10);
       
-      // Mês (formato curto)
-      const monthShort = formatMonthShort(month);
-      const monthText = monthShort.length > 10 ? monthShort.substring(0, 10) : monthShort;
+      // Mês completo
+      const monthText = formatMonthShort(month);
       doc.text(monthText, monthColPositions[0], yPosition);
       
-      // Entradas (com número de transações)
+      // Entradas com contador
       const incomeText = formatCurrency(incomes);
       doc.text(incomeText, monthColPositions[1], yPosition);
-      doc.setFontSize(7);
-      doc.text(`(${incomeCount})`, monthColPositions[1], yPosition + 3);
-      doc.setFontSize(9);
+      doc.setFontSize(8);
+      doc.text(`${incomeCount} trans.`, monthColPositions[1], yPosition + 4);
+      doc.setFontSize(10);
       
       // Despesas de Repasses
       doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
@@ -697,8 +709,64 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       doc.text(formatCurrency(balance), monthColPositions[5], yPosition);
       doc.setTextColor(originalColor);
       
-      yPosition += 8;
+      yPosition += 12;
     });
+  }
+
+  // Gráfico de barras simples para visualização (opcional)
+  if (monthlyBreakdown.length > 0 && monthlyBreakdown.length <= 12) {
+    checkPageBreak(60);
+    
+    yPosition += 10;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VISUALIZAÇÃO POR MÊS', margin, yPosition);
+    yPosition += 15;
+    
+    // Configurações do gráfico
+    const chartWidth = pageWidth - (2 * margin);
+    const chartHeight = 50;
+    const chartX = margin;
+    const chartY = yPosition;
+    const barWidth = (chartWidth / monthlyBreakdown.length) * 0.7;
+    const maxValue = Math.max(...monthlyBreakdown.map(m => Math.max(m.incomes, m.totalExpenses)));
+    const scale = chartHeight / maxValue;
+    
+    // Desenhar eixos
+    doc.setLineWidth(0.5);
+    doc.line(chartX, chartY, chartX, chartY + chartHeight); // Eixo Y
+    doc.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight); // Eixo X
+    
+    // Desenhar barras
+    monthlyBreakdown.forEach((monthData, index) => {
+      const barX = chartX + (index * (chartWidth / monthlyBreakdown.length)) + 5;
+      
+      // Barra de entradas (verde)
+      const incomeHeight = monthData.incomes * scale;
+      doc.setFillColor(0, 128, 0);
+      doc.rect(barX, chartY + chartHeight - incomeHeight, barWidth * 0.4, incomeHeight, 'F');
+      
+      // Barra de despesas (vermelho)
+      const expenseHeight = monthData.totalExpenses * scale;
+      doc.setFillColor(255, 0, 0);
+      doc.rect(barX + barWidth * 0.4, chartY + chartHeight - expenseHeight, barWidth * 0.4, expenseHeight, 'F');
+      
+      // Nome do mês (abreviado)
+      const monthLabel = monthData.month.split('-')[1] + '/' + monthData.month.split('-')[0].slice(2);
+      doc.setFontSize(8);
+      doc.text(monthLabel, barX + barWidth * 0.2, chartY + chartHeight + 5);
+    });
+    
+    // Legenda
+    yPosition += chartHeight + 20;
+    doc.setFontSize(9);
+    doc.setFillColor(0, 128, 0);
+    doc.rect(margin, yPosition, 8, 8, 'F');
+    doc.text('Entradas', margin + 12, yPosition + 6);
+    
+    doc.setFillColor(255, 0, 0);
+    doc.rect(margin + 60, yPosition, 8, 8, 'F');
+    doc.text('Despesas', margin + 72, yPosition + 6);
   }
 
   // Rodapé em todas as páginas
@@ -710,17 +778,21 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.setPage(i);
     const footerY = pageHeight - 10;
     
+    // Linha divisória do rodapé
+    doc.setLineWidth(0.1);
+    doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    
     // Número da página
     doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
     
     // Data de geração
-    doc.text(`Gerado: ${new Date().toLocaleDateString('pt-BR')}`, margin, footerY);
+    const genDate = new Date().toLocaleDateString('pt-BR');
+    const genTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    doc.text(`Gerado em: ${genDate} ${genTime}`, margin, footerY);
     
-    // Médico (se couber)
-    if (pageWidth > 200) {
-      const doctorShort = doctorName.length > 20 ? doctorName.substring(0, 20) + '...' : doctorName;
-      doc.text(`Médico: ${doctorShort}`, pageWidth - margin - 50, footerY);
-    }
+    // Médico
+    const doctorShort = doctorName.length > 25 ? doctorName.substring(0, 25) + '...' : doctorName;
+    doc.text(`Médico: ${doctorShort}`, pageWidth - margin - 80, footerY);
   }
 
   // Salvar PDF
