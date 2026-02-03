@@ -44,12 +44,13 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   }, [doctorTransfers]);
 
   const expenseTransfers = useMemo(() => {
-    return doctorTransfers.filter(t => t.option_type === 'expense');
+    const expenses = doctorTransfers.filter(t => t.option_type === 'expense');
+    return expenses;
   }, [doctorTransfers]);
 
   const totals = useMemo(() => {
-    const income = incomeTransfers.reduce((acc, t) => acc + t.net_amount, 0);
-    const expense = expenseTransfers.reduce((acc, t) => acc + t.expense_amount, 0);
+    const income = incomeTransfers.reduce((acc, t) => acc + (Number(t.net_amount) || 0), 0);
+    const expense = expenseTransfers.reduce((acc, t) => acc + (Number(t.expense_amount) || 0), 0);
     return { income, expense, balance: income - expense };
   }, [incomeTransfers, expenseTransfers]);
 
@@ -79,7 +80,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         grouped[category] = { transactions: [], total: 0 };
       }
       grouped[category].transactions.push(t);
-      grouped[category].total += t.expense_amount;
+      grouped[category].total += (Number(t.expense_amount) || 0);
     });
 
     return grouped;
