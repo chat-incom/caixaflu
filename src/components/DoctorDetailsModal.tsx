@@ -1,7 +1,6 @@
 import { X, TrendingUp, TrendingDown, User, FileDown, Calendar, DollarSign, Percent, CreditCard } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 interface MedicalTransfer {
   id: string;
@@ -97,7 +96,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     }> = {};
 
     expenseTransfers.forEach(t => {
-      // Usa o category para agrupar as despesas
       const category = t.category || 'outros';
       if (!grouped[category]) {
         grouped[category] = { 
@@ -144,13 +142,12 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       }
     });
 
-    // Calcular saldo por mês
     Object.keys(months).forEach(month => {
       months[month].balance = months[month].incomes - months[month].expenses;
     });
 
     return Object.entries(months)
-      .sort(([a], [b]) => b.localeCompare(a)) // Ordenar do mais recente para o mais antigo
+      .sort(([a], [b]) => b.localeCompare(a))
       .map(([month, data]) => ({ month, ...data }));
   }, [doctorTransfers]);
 
@@ -261,55 +258,97 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.setFont('helvetica', 'bold');
     doc.text(`Saldo Líquido: ${formatCurrency(totals.balance)}`, 20, yPosition);
 
-    // Tabela de Entradas por Tipo
+    // Tabela de Entradas por Tipo (manual)
     if (incomeTransfers.length > 0) {
       yPosition += 15;
+      
+      // Verificar se precisa de nova página
+      if (yPosition > 250) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('ENTRADAS POR TIPO DE PROCEDIMENTO', 15, yPosition);
-
-      const incomeTableData = Object.entries(incomesByType).map(([type, data]) => [
-        optionTypeLabels[type] || type,
-        data.count.toString(),
-        formatCurrency(data.totalGross),
-        formatCurrency(data.totalDiscounts),
-        formatCurrency(data.total)
-      ]);
-
-      autoTable(doc, {
-        startY: yPosition + 5,
-        head: [['Tipo', 'Qtd', 'Valor Bruto', 'Descontos', 'Valor Líquido']],
-        body: incomeTableData,
-        theme: 'striped',
-        headStyles: { fillColor: [22, 163, 74] },
-        margin: { left: 15 }
+      
+      yPosition += 8;
+      
+      // Cabeçalho da tabela
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Tipo', 15, yPosition);
+      doc.text('Qtd', 70, yPosition);
+      doc.text('Valor Bruto', 90, yPosition);
+      doc.text('Descontos', 140, yPosition);
+      doc.text('Valor Líquido', 180, yPosition);
+      
+      yPosition += 6;
+      doc.setLineWidth(0.2);
+      doc.line(15, yPosition, pageWidth - 15, yPosition);
+      
+      yPosition += 4;
+      
+      // Conteúdo da tabela
+      doc.setFont('helvetica', 'normal');
+      Object.entries(incomesByType).forEach(([type, data]) => {
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        
+        doc.text(optionTypeLabels[type] || type, 15, yPosition);
+        doc.text(data.count.toString(), 70, yPosition);
+        doc.text(formatCurrency(data.totalGross), 90, yPosition);
+        doc.text(formatCurrency(data.totalDiscounts), 140, yPosition);
+        doc.text(formatCurrency(data.total), 180, yPosition);
+        
+        yPosition += 8;
       });
-
-      yPosition = (doc as any).lastAutoTable.finalY + 10;
     }
 
-    // Tabela de Saídas por Categoria
+    // Tabela de Saídas por Categoria (manual)
     if (expenseTransfers.length > 0) {
+      yPosition += 10;
+      
+      if (yPosition > 250) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('SAÍDAS POR CATEGORIA', 15, yPosition);
-
-      const expenseTableData = Object.entries(expensesByCategory).map(([category, data]) => [
-        expenseCategoryLabels[category] || category,
-        data.count.toString(),
-        formatCurrency(data.total)
-      ]);
-
-      autoTable(doc, {
-        startY: yPosition + 5,
-        head: [['Categoria', 'Qtd', 'Valor Total']],
-        body: expenseTableData,
-        theme: 'striped',
-        headStyles: { fillColor: [220, 38, 38] },
-        margin: { left: 15 }
+      
+      yPosition += 8;
+      
+      // Cabeçalho da tabela
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Categoria', 15, yPosition);
+      doc.text('Qtd', 100, yPosition);
+      doc.text('Valor Total', 140, yPosition);
+      
+      yPosition += 6;
+      doc.setLineWidth(0.2);
+      doc.line(15, yPosition, pageWidth - 15, yPosition);
+      
+      yPosition += 4;
+      
+      // Conteúdo da tabela
+      doc.setFont('helvetica', 'normal');
+      Object.entries(expensesByCategory).forEach(([category, data]) => {
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        
+        doc.text(expenseCategoryLabels[category] || category, 15, yPosition);
+        doc.text(data.count.toString(), 100, yPosition);
+        doc.text(formatCurrency(data.total), 140, yPosition);
+        
+        yPosition += 8;
       });
-
-      yPosition = (doc as any).lastAutoTable.finalY + 10;
     }
 
     // Detalhamento por Mês
@@ -320,23 +359,51 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('DETALHAMENTO POR MÊS', 15, yPosition);
-
-      const monthlyTableData = monthlyBreakdown.map(({ month, incomes, expenses, balance, incomeCount, expenseCount }) => [
-        formatMonthShort(month),
-        `${incomeCount} entradas`,
-        formatCurrency(incomes),
-        `${expenseCount} saídas`,
-        formatCurrency(expenses),
-        formatCurrency(balance)
-      ]);
-
-      autoTable(doc, {
-        startY: yPosition + 5,
-        head: [['Mês', 'Entradas', 'Valor', 'Saídas', 'Valor', 'Saldo']],
-        body: monthlyTableData,
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246] },
-        margin: { left: 15 }
+      
+      yPosition += 8;
+      
+      // Cabeçalho da tabela
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Mês', 15, yPosition);
+      doc.text('Entradas', 60, yPosition);
+      doc.text('Valor', 100, yPosition);
+      doc.text('Saídas', 140, yPosition);
+      doc.text('Valor', 180, yPosition);
+      doc.text('Saldo', 220, yPosition);
+      
+      yPosition += 6;
+      doc.setLineWidth(0.2);
+      doc.line(15, yPosition, pageWidth - 15, yPosition);
+      
+      yPosition += 4;
+      
+      // Conteúdo da tabela
+      doc.setFont('helvetica', 'normal');
+      monthlyBreakdown.forEach(({ month, incomes, expenses, balance, incomeCount, expenseCount }) => {
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        
+        doc.text(formatMonthShort(month), 15, yPosition);
+        doc.text(`${incomeCount} trans.`, 60, yPosition);
+        doc.text(formatCurrency(incomes), 100, yPosition);
+        doc.text(`${expenseCount} trans.`, 140, yPosition);
+        doc.text(formatCurrency(expenses), 180, yPosition);
+        
+        // Saldo com cor condicional
+        if (balance >= 0) {
+          doc.setTextColor(0, 128, 0); // Verde para positivo
+        } else {
+          doc.setTextColor(255, 0, 0); // Vermelho para negativo
+        }
+        doc.text(formatCurrency(balance), 220, yPosition);
+        
+        // Resetar cor para preto
+        doc.setTextColor(0, 0, 0);
+        
+        yPosition += 8;
       });
     }
 
