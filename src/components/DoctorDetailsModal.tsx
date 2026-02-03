@@ -1,5 +1,5 @@
 import { X, TrendingUp, TrendingDown, User, FileDown, Calendar, DollarSign, Percent, CreditCard, Receipt, Database } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 
@@ -40,13 +40,52 @@ type DoctorDetailsModalProps = {
   selectedMonth?: string;
 };
 
+// Mapeamentos fora do componente para evitar referências cíclicas
+const optionTypeLabels: Record<string, string> = {
+  option1: 'Procedimentos Básicos',
+  option2: 'Procedimentos Especiais',
+  option3: 'Hospitais'
+};
+
+const optionTypeDiscounts: Record<string, string> = {
+  option1: '16,33%',
+  option2: '10,93%',
+  option3: '10,93%'
+};
+
+const expenseCategoryLabels: Record<string, string> = {
+  rateio_mensal: 'Rateio Mensal',
+  medicacao: 'Medicação',
+  insumo: 'Insumo',
+  outros: 'Outros',
+  // Categorias da tabela transactions
+  fixed: 'Despesa Fixa',
+  variable: 'Despesa Variável',
+  repasse_medico: 'Repasse Médico',
+  imposto: 'Imposto',
+  adiantamento: 'Adiantamento',
+  fatura: 'Fatura',
+  investimentos: 'Investimentos'
+};
+
+const paymentMethodLabels: Record<string, string> = {
+  cash: 'Dinheiro',
+  pix: 'PIX',
+  debit_card: 'Cartão de Débito',
+  credit_card: 'Cartão de Crédito'
+};
+
+const getExpenseSourceLabel = (source: string) => {
+  return source === 'medical_transfer' ? 'Associada a Repasse' : 'Despesa Independente';
+};
+
 export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMonth }: DoctorDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'incomes' | 'expenses'>('summary');
   const [independentExpenses, setIndependentExpenses] = useState<Transaction[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(true);
 
   // Carregar despesas independentes do médico
-  useState(() => {
+  useEffect(() => {
     const fetchIndependentExpenses = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -73,7 +112,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     };
 
     fetchIndependentExpenses();
-  });
+  }, [doctorName]);
 
   const doctorTransfers = useMemo(() => {
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
@@ -356,49 +395,12 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
   };
 
-  const optionTypeLabels: Record<string, string> = {
-    option1: 'Procedimentos Básicos',
-    option2: 'Procedimentos Especiais',
-    option3: 'Hospitais'
-  };
-
-  const optionTypeDiscounts: Record<string, string> = {
-    option1: '16,33%',
-    option2: '10,93%',
-    option3: '10,93%'
-  };
-
-  const expenseCategoryLabels: Record<string, string> = {
-    rateio_mensal: 'Rateio Mensal',
-    medicacao: 'Medicação',
-    insumo: 'Insumo',
-    outros: 'Outros',
-    // Categorias da tabela transactions
-    fixed: 'Despesa Fixa',
-    variable: 'Despesa Variável',
-    repasse_medico: 'Repasse Médico',
-    imposto: 'Imposto',
-    adiantamento: 'Adiantamento',
-    fatura: 'Fatura',
-    investimentos: 'Investimentos'
-  };
-
-  const paymentMethodLabels: Record<string, string> = {
-    cash: 'Dinheiro',
-    pix: 'PIX',
-    debit_card: 'Cartão de Débito',
-    credit_card: 'Cartão de Crédito'
-  };
-
+  // Mapeamentos para uso dentro do componente
   const paymentMethodIcons: Record<string, React.ReactNode> = {
     cash: <DollarSign size={14} />,
     pix: <span className="text-xs">PIX</span>,
     debit_card: <CreditCard size={14} />,
     credit_card: <CreditCard size={14} />
-  };
-
-  const getExpenseSourceLabel = (source: string) => {
-    return source === 'medical_transfer' ? 'Associada a Repasse' : 'Despesa Independente';
   };
 
   const generatePDF = () => {
