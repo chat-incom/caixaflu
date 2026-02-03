@@ -29,50 +29,21 @@ type DoctorDetailsModalProps = {
 
 export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMonth }: DoctorDetailsModalProps) {
   const doctorTransfers = useMemo(() => {
-    console.log('=== FILTRO INICIAL ===');
-    console.log('Doctor Name:', doctorName);
-    console.log('Selected Month:', selectedMonth);
-    console.log('All Transfers:', transfers);
-
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
-    console.log('Transfers do médico (antes do filtro de mês):', filtered);
 
     if (selectedMonth) {
       filtered = filtered.filter(t => t.reference_month === selectedMonth);
-      console.log('Transfers do médico (depois do filtro de mês):', filtered);
     }
 
     return filtered;
   }, [transfers, doctorName, selectedMonth]);
 
   const incomeTransfers = useMemo(() => {
-    const filtered = doctorTransfers.filter(t => t.option_type !== 'expense');
-    console.log('=== ENTRADAS ===');
-    console.log('Income Transfers:', filtered);
-    return filtered;
+    return doctorTransfers.filter(t => t.option_type !== 'expense');
   }, [doctorTransfers]);
 
   const expenseTransfers = useMemo(() => {
-    console.log('=== SAÍDAS ===');
-    console.log('Doctor Transfers (todos):', doctorTransfers);
-    console.log('Option types:', doctorTransfers.map(t => ({ id: t.id, option_type: t.option_type, expense_amount: t.expense_amount })));
-
-    const filtered = doctorTransfers.filter(t => {
-      const isExpense = t.option_type === 'expense';
-      console.log(`Transfer ${t.id}: option_type="${t.option_type}", isExpense=${isExpense}`);
-      return isExpense;
-    });
-
-    console.log('Expense Transfers (filtrados):', filtered);
-    console.log('Expense details:', filtered.map(t => ({
-      id: t.id,
-      desc: t.description,
-      amount: t.expense_amount,
-      category: t.expense_category,
-      option_type: t.option_type
-    })));
-
-    return filtered;
+    return doctorTransfers.filter(t => t.option_type === 'expense');
   }, [doctorTransfers]);
 
   const totals = useMemo(() => {
@@ -110,8 +81,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       grouped[category].total += t.expense_amount;
     });
 
-    console.log('Expenses By Category:', grouped);
-    console.log('Number of categories:', Object.keys(grouped).length);
     return grouped;
   }, [expenseTransfers]);
 

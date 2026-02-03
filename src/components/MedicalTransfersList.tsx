@@ -404,7 +404,11 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       if (!stats[doctor]) {
         stats[doctor] = { total: 0, count: 0 };
       }
-      stats[doctor].total += transfer.net_amount;
+      // Para saídas puras (option_type === 'expense'), não somar no total
+      // Para entradas, somar o net_amount
+      if (transfer.option_type !== 'expense') {
+        stats[doctor].total += transfer.net_amount;
+      }
       stats[doctor].count += 1;
     });
 
