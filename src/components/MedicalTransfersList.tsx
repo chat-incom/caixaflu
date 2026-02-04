@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Trash2, Edit2, X, Save } from 'lucide-react';
+import { Trash2, Edit2, X, Save, ChevronDown, ChevronUp, List } from 'lucide-react';
 import { DoctorDetailsModal } from './DoctorDetailsModal';
 
 interface MedicalTransfer {
@@ -79,6 +79,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     category: string;
   }}>({});
   const [doctorDetailsModal, setDoctorDetailsModal] = useState<string | null>(null);
+  // Novo estado para controlar a visualização expandida
+  const [showAllTransfers, setShowAllTransfers] = useState<boolean>(false);
+  const [initialDisplayCount] = useState<number>(10); // Quantidade inicial a mostrar
 
   useEffect(() => {
     fetchTransfers();
@@ -470,6 +473,13 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
     return matchMonth && matchDoctor;
   });
 
+  // Determina quais transferências mostrar com base na opção de visualização
+  const transfersToShow = showAllTransfers 
+    ? filteredTransfers 
+    : filteredTransfers.slice(0, initialDisplayCount);
+
+  const hasMoreTransfers = filteredTransfers.length > initialDisplayCount;
+
   const totalRepasse = filteredTransfers.reduce((sum, t) => sum + t.net_amount, 0);
   const totalEntrada = filteredTransfers.reduce((sum, t) => sum + t.amount, 0);
   const totalDesconto = filteredTransfers.reduce((sum, t) => sum + t.discount_amount + (t.payment_discount_amount || 0), 0);
@@ -493,35 +503,39 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mês de Referência</label>
             <select
-  value={selectedMonth}
-  onChange={(e) => {
-    setSelectedMonth(e.target.value);
-    setSelectedDoctor('');
-  }}
-  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
->
-  <option value="">Todos os meses</option>
-  {monthlyStats.map((stat) => {
-    const [year, month] = stat.month.split('-');
-    // Usar o dia 15 para evitar problemas com início/fim do mês
-    const date = new Date(parseInt(year), parseInt(month) - 1, 15);
-    return (
-      <option key={stat.month} value={stat.month}>
-        {date.toLocaleDateString('pt-BR', { 
-          month: 'long', 
-          year: 'numeric',
-          timeZone: 'UTC' // Forçar UTC para evitar fuso horário
-        })}
-      </option>
-    );
-  })}
-</select>
-
+              value={selectedMonth}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setSelectedDoctor('');
+                setShowAllTransfers(false); // Resetar visualização ao mudar filtro
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos os meses</option>
+              {monthlyStats.map((stat) => {
+                const [year, month] = stat.month.split('-');
+                // Usar o dia 15 para evitar problemas com início/fim do mês
+                const date = new Date(parseInt(year), parseInt(month) - 1, 15);
+                return (
+                  <option key={stat.month} value={stat.month}>
+                    {date.toLocaleDateString('pt-BR', { 
+                      month: 'long', 
+                      year: 'numeric',
+                      timeZone: 'UTC' // Forçar UTC para evitar fuso horário
+                    })}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Médico</label>
             <select
               value={selectedDoctor}
-              onChange={(e) => setSelectedDoctor(e.target.value)}
+              onChange={(e) => {
+                setSelectedDoctor(e.target.value);
+                setShowAllTransfers(false); // Resetar visualização ao mudar filtro
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todos os médicos</option>
@@ -580,7 +594,11 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
                     >
                       <td
                         className="py-3 px-4 text-sm font-medium text-gray-800 cursor-pointer"
-                        onClick={() => setSelectedDoctor(stat.doctor === selectedDoctor ? '' : stat.doctor)}
+                        onClick={() => {
+                          const newDoctor = stat.doctor === selectedDoctor ? '' : stat.doctor;
+                          setSelectedDoctor(newDoctor);
+                          setShowAllTransfers(false);
+                        }}
                       >
                         {stat.doctor}
                         {selectedDoctor === stat.doctor && (
@@ -705,259 +723,315 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
       )}
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-xl font-semibold mb-4 text-gray-800">Lista de Repasses</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-gray-800">
+            Lista de Repasses
+            {filteredTransfers.length > 0 && (
+              <span className="ml-2 text-sm font-normal text-gray-500">
+                ({filteredTransfers.length} lançamentos)
+              </span>
+            )}
+          </h3>
+          
+          {/* Botão para ampliar/ver todos os lançamentos */}
+          {hasMoreTransfers && (
+            <button
+              onClick={() => setShowAllTransfers(!showAllTransfers)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors"
+            >
+              <List size={18} />
+              <span className="font-medium">
+                {showAllTransfers ? 'Mostrar menos' : `Ver todos (${filteredTransfers.length})`}
+              </span>
+              {showAllTransfers ? (
+                <ChevronUp size={18} />
+              ) : (
+                <ChevronDown size={18} />
+              )}
+            </button>
+          )}
+        </div>
 
         {filteredTransfers.length === 0 ? (
           <p className="text-center text-gray-600 py-8">Nenhum repasse registrado ainda</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Data</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Mês Ref.</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Médico</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Opção</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Categoria</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Descrição</th>
-                  <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Entrada</th>
-                  <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Desconto</th>
-                  <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Repasse</th>
-                  <th className="text-center py-3 px-2 text-sm font-semibold text-gray-700">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTransfers.map((transfer) => (
-                  <tr key={transfer.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    {editingId === transfer.id ? (
-                      <>
-                        <td className="py-3 px-2">
-                          <input
-                            type="date"
-                            value={editForm.date}
-                            onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          />
-                        </td>
-                        <td className="py-3 px-2">
-                          <input
-                            type="month"
-                            value={editForm.reference_month}
-                            onChange={(e) => setEditForm({ ...editForm, reference_month: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          />
-                        </td>
-                        <td className="py-3 px-2">
-                          <select
-                            value={editForm.doctor_name}
-                            onChange={(e) => setEditForm({ ...editForm, doctor_name: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          >
-                            <option value="">Selecione</option>
-                            {availableDoctors.map((doctor) => (
-                              <option key={doctor} value={doctor}>{doctor}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-3 px-2">
-                          <select
-                            value={editForm.option_type}
-                            onChange={(e) => setEditForm({ ...editForm, option_type: e.target.value, category: e.target.value === 'expense' ? 'Saída' : '' })}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          >
-                            <option value="option1">Opção 1</option>
-                            <option value="option2">Opção 2</option>
-                            <option value="option3">Opção 3</option>
-                            <option value="expense">Saída</option>
-                          </select>
-                        </td>
-                        <td className="py-3 px-2">
-                          {editForm.option_type === 'expense' ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Data</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Mês Ref.</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Médico</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Opção</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Categoria</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">Descrição</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Entrada</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Desconto</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">Repasse</th>
+                    <th className="text-center py-3 px-2 text-sm font-semibold text-gray-700">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transfersToShow.map((transfer) => (
+                    <tr key={transfer.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      {editingId === transfer.id ? (
+                        <>
+                          <td className="py-3 px-2">
+                            <input
+                              type="date"
+                              value={editForm.date}
+                              onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          </td>
+                          <td className="py-3 px-2">
+                            <input
+                              type="month"
+                              value={editForm.reference_month}
+                              onChange={(e) => setEditForm({ ...editForm, reference_month: e.target.value })}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          </td>
+                          <td className="py-3 px-2">
                             <select
-                              value={editForm.expense_category || ''}
-                              onChange={(e) => setEditForm({ ...editForm, expense_category: e.target.value || null })}
+                              value={editForm.doctor_name}
+                              onChange={(e) => setEditForm({ ...editForm, doctor_name: e.target.value })}
                               className="w-full px-2 py-1 border rounded text-sm"
                             >
                               <option value="">Selecione</option>
-                              {EXPENSE_CATEGORIES.map((cat) => (
-                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                              {availableDoctors.map((doctor) => (
+                                <option key={doctor} value={doctor}>{doctor}</option>
                               ))}
                             </select>
-                          ) : (
-                            <>
+                          </td>
+                          <td className="py-3 px-2">
+                            <select
+                              value={editForm.option_type}
+                              onChange={(e) => setEditForm({ ...editForm, option_type: e.target.value, category: e.target.value === 'expense' ? 'Saída' : '' })}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            >
+                              <option value="option1">Opção 1</option>
+                              <option value="option2">Opção 2</option>
+                              <option value="option3">Opção 3</option>
+                              <option value="expense">Saída</option>
+                            </select>
+                          </td>
+                          <td className="py-3 px-2">
+                            {editForm.option_type === 'expense' ? (
                               <select
-                                value={editForm.category}
-                                onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                                className="w-full px-2 py-1 border rounded text-sm mb-1"
-                              >
-                                <option value="">Selecione</option>
-                                {getCurrentCategories(editForm.option_type || 'option1').map((cat) => (
-                                  <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                              </select>
-                              <select
-                                value={editForm.payment_method}
-                                onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}
+                                value={editForm.expense_category || ''}
+                                onChange={(e) => setEditForm({ ...editForm, expense_category: e.target.value || null })}
                                 className="w-full px-2 py-1 border rounded text-sm"
                               >
-                                <option value="pix">PIX</option>
-                                <option value="cash">Dinheiro</option>
-                                <option value="debit_card">Débito</option>
-                                <option value="credit_card">Crédito</option>
+                                <option value="">Selecione</option>
+                                {EXPENSE_CATEGORIES.map((cat) => (
+                                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                ))}
                               </select>
-                            </>
-                          )}
-                        </td>
-                        <td className="py-3 px-2">
-                          <input
-                            type="text"
-                            value={editForm.description}
-                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                            placeholder="Descrição"
-                          />
-                        </td>
-                        <td className="py-3 px-2">
-                          {editForm.option_type === 'expense' ? (
-                            <span className="text-sm text-gray-500">-</span>
-                          ) : (
+                            ) : (
+                              <>
+                                <select
+                                  value={editForm.category}
+                                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                                  className="w-full px-2 py-1 border rounded text-sm mb-1"
+                                >
+                                  <option value="">Selecione</option>
+                                  {getCurrentCategories(editForm.option_type || 'option1').map((cat) => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={editForm.payment_method}
+                                  onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })}
+                                  className="w-full px-2 py-1 border rounded text-sm"
+                                >
+                                  <option value="pix">PIX</option>
+                                  <option value="cash">Dinheiro</option>
+                                  <option value="debit_card">Débito</option>
+                                  <option value="credit_card">Crédito</option>
+                                </select>
+                              </>
+                            )}
+                          </td>
+                          <td className="py-3 px-2">
                             <input
-                              type="number"
-                              step="0.01"
-                              value={editForm.amount}
-                              onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) })}
-                              className="w-full px-2 py-1 border rounded text-sm text-right"
+                              type="text"
+                              value={editForm.description}
+                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                              placeholder="Descrição"
                             />
-                          )}
-                        </td>
-                        <td className="py-3 px-2 text-sm text-gray-500 text-center">
-                          {editForm.option_type === 'expense' ? '-' : 'Recalculado'}
-                        </td>
-                        <td className="py-3 px-2">
-                          {editForm.option_type === 'expense' ? (
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editForm.expense_amount || 0}
-                              onChange={(e) => setEditForm({ ...editForm, expense_amount: parseFloat(e.target.value) || 0 })}
-                              className="w-full px-2 py-1 border rounded text-sm text-right"
-                              placeholder="0.00"
-                            />
-                          ) : (
-                            <span className="text-sm text-gray-500">Recalculado</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1 justify-center">
-                            <button
-                              onClick={saveEdit}
-                              className="p-1 text-green-600 hover:text-green-700"
-                              title="Salvar"
-                            >
-                              <Save size={18} />
-                            </button>
-                            <button
-                              onClick={cancelEdit}
-                              className="p-1 text-gray-600 hover:text-gray-700"
-                              title="Cancelar"
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-gray-500' : 'text-gray-700'}`}>
-                          {formatDate(transfer.date)}
-                        </td>
-                        <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-gray-500' : 'text-gray-700'}`}>
-                          {formatReferenceMonth(transfer.reference_month)}
-                        </td>
-                        <td className={`py-3 px-2 text-sm font-medium ${transfer.option_type === 'expense' ? 'text-gray-600' : 'text-gray-800'}`}>
-                          {transfer.doctor_name || '-'}
-                        </td>
-                        <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-orange-600 font-semibold' : 'text-gray-700'}`}>
-                          {getOptionLabel(transfer.option_type)}
-                        </td>
-                        <td className="py-3 px-2 text-sm text-gray-700">
-                          {transfer.option_type === 'expense' ? (
-                            <span className="text-orange-600 font-medium">
-                              {getExpenseCategoryLabel(transfer.expense_category)}
-                            </span>
-                          ) : (
-                            <>
-                              {transfer.category}
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                {getPaymentMethodLabel(transfer.payment_method || 'pix')}
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="py-3 px-2 text-sm text-gray-600">
-                          {transfer.description || '-'}
-                        </td>
-                        <td className={`py-3 px-2 text-sm text-right ${transfer.option_type === 'expense' ? 'text-gray-400' : 'text-gray-700'}`}>
-                          {transfer.option_type === 'expense' ? '-' : `R$ ${transfer.amount.toFixed(2)}`}
-                        </td>
-                        <td className={`py-3 px-2 text-sm text-right ${transfer.option_type === 'expense' ? 'text-gray-400' : 'text-red-600'}`}>
-                          {transfer.option_type === 'expense' ? (
-                            '-'
-                          ) : (
-                            <>
-                              - R$ {(transfer.discount_amount + (transfer.payment_discount_amount || 0)).toFixed(2)}
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                ({transfer.discount_percentage}%{(transfer.payment_discount_percentage || 0) > 0 ? ` + ${transfer.payment_discount_percentage}%` : ''})
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className={`py-3 px-2 text-sm font-semibold text-right ${transfer.option_type === 'expense' ? 'text-orange-600' : 'text-green-600'}`}>
-                          {transfer.option_type === 'expense' ? (
-                            <>
-                              - R$ {transfer.expense_amount.toFixed(2)}
-                            </>
-                          ) : (
-                            <>
-                              R$ {transfer.net_amount.toFixed(2)}
-                              {(transfer.expense_amount || 0) > 0 && (
-                                <>
-                                  <div className="text-xs text-orange-600 mt-0.5">
-                                    - R$ {transfer.expense_amount.toFixed(2)}
-                                  </div>
-                                  <div className="text-xs font-bold text-teal-600 mt-0.5">
-                                    = R$ {(transfer.net_amount - transfer.expense_amount).toFixed(2)}
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1 justify-center">
-                            <button
-                              onClick={() => startEdit(transfer)}
-                              className="p-1 text-blue-600 hover:text-blue-700"
-                              title="Editar"
-                            >
-                              <Edit2 size={18} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(transfer.id)}
-                              className="p-1 text-red-600 hover:text-red-700"
-                              title="Excluir"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            {editForm.option_type === 'expense' ? (
+                              <span className="text-sm text-gray-500">-</span>
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editForm.amount}
+                                onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) })}
+                                className="w-full px-2 py-1 border rounded text-sm text-right"
+                              />
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-sm text-gray-500 text-center">
+                            {editForm.option_type === 'expense' ? '-' : 'Recalculado'}
+                          </td>
+                          <td className="py-3 px-2">
+                            {editForm.option_type === 'expense' ? (
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editForm.expense_amount || 0}
+                                onChange={(e) => setEditForm({ ...editForm, expense_amount: parseFloat(e.target.value) || 0 })}
+                                className="w-full px-2 py-1 border rounded text-sm text-right"
+                                placeholder="0.00"
+                              />
+                            ) : (
+                              <span className="text-sm text-gray-500">Recalculado</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={saveEdit}
+                                className="p-1 text-green-600 hover:text-green-700"
+                                title="Salvar"
+                              >
+                                <Save size={18} />
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="p-1 text-gray-600 hover:text-gray-700"
+                                title="Cancelar"
+                              >
+                                <X size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-gray-500' : 'text-gray-700'}`}>
+                            {formatDate(transfer.date)}
+                          </td>
+                          <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-gray-500' : 'text-gray-700'}`}>
+                            {formatReferenceMonth(transfer.reference_month)}
+                          </td>
+                          <td className={`py-3 px-2 text-sm font-medium ${transfer.option_type === 'expense' ? 'text-gray-600' : 'text-gray-800'}`}>
+                            {transfer.doctor_name || '-'}
+                          </td>
+                          <td className={`py-3 px-2 text-sm ${transfer.option_type === 'expense' ? 'text-orange-600 font-semibold' : 'text-gray-700'}`}>
+                            {getOptionLabel(transfer.option_type)}
+                          </td>
+                          <td className="py-3 px-2 text-sm text-gray-700">
+                            {transfer.option_type === 'expense' ? (
+                              <span className="text-orange-600 font-medium">
+                                {getExpenseCategoryLabel(transfer.expense_category)}
+                              </span>
+                            ) : (
+                              <>
+                                {transfer.category}
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {getPaymentMethodLabel(transfer.payment_method || 'pix')}
+                                </div>
+                              </>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-sm text-gray-600">
+                            {transfer.description || '-'}
+                          </td>
+                          <td className={`py-3 px-2 text-sm text-right ${transfer.option_type === 'expense' ? 'text-gray-400' : 'text-gray-700'}`}>
+                            {transfer.option_type === 'expense' ? '-' : `R$ ${transfer.amount.toFixed(2)}`}
+                          </td>
+                          <td className={`py-3 px-2 text-sm text-right ${transfer.option_type === 'expense' ? 'text-gray-400' : 'text-red-600'}`}>
+                            {transfer.option_type === 'expense' ? (
+                              '-'
+                            ) : (
+                              <>
+                                - R$ {(transfer.discount_amount + (transfer.payment_discount_amount || 0)).toFixed(2)}
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  ({transfer.discount_percentage}%{(transfer.payment_discount_percentage || 0) > 0 ? ` + ${transfer.payment_discount_percentage}%` : ''})
+                                </div>
+                              </>
+                            )}
+                          </td>
+                          <td className={`py-3 px-2 text-sm font-semibold text-right ${transfer.option_type === 'expense' ? 'text-orange-600' : 'text-green-600'}`}>
+                            {transfer.option_type === 'expense' ? (
+                              <>
+                                - R$ {transfer.expense_amount.toFixed(2)}
+                              </>
+                            ) : (
+                              <>
+                                R$ {transfer.net_amount.toFixed(2)}
+                                {(transfer.expense_amount || 0) > 0 && (
+                                  <>
+                                    <div className="text-xs text-orange-600 mt-0.5">
+                                      - R$ {transfer.expense_amount.toFixed(2)}
+                                    </div>
+                                    <div className="text-xs font-bold text-teal-600 mt-0.5">
+                                      = R$ {(transfer.net_amount - transfer.expense_amount).toFixed(2)}
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() => startEdit(transfer)}
+                                className="p-1 text-blue-600 hover:text-blue-700"
+                                title="Editar"
+                              >
+                                <Edit2 size={18} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(transfer.id)}
+                                className="p-1 text-red-600 hover:text-red-700"
+                                title="Excluir"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Indicador de quantos registros estão sendo mostrados */}
+            <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+              <div className="text-sm text-gray-500">
+                Mostrando {transfersToShow.length} de {filteredTransfers.length} lançamentos
+              </div>
+              
+              {hasMoreTransfers && !showAllTransfers && (
+                <button
+                  onClick={() => setShowAllTransfers(true)}
+                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium text-sm"
+                >
+                  <span>Ampliar para ver todos os {filteredTransfers.length} lançamentos</span>
+                  <ChevronDown size={16} />
+                </button>
+              )}
+              
+              {showAllTransfers && (
+                <button
+                  onClick={() => setShowAllTransfers(false)}
+                  className="flex items-center gap-1 text-gray-600 hover:text-gray-800 font-medium text-sm"
+                >
+                  <span>Mostrar apenas os primeiros {initialDisplayCount}</span>
+                  <ChevronUp size={16} />
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
 
