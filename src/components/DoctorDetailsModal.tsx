@@ -1,4 +1,4 @@
-import { X, TrendingUp, TrendingDown, User, FileDown, Calendar, DollarSign, Percent, CreditCard, Receipt, Database } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, User, FileDown, Calendar, DollarSign, Percent, CreditCard, Receipt, Database, Filter } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
@@ -79,10 +79,41 @@ const getExpenseSourceLabel = (source: string) => {
   return source === 'medical_transfer' ? 'Associada a Repasse' : 'Despesa Independente';
 };
 
+// Interface para o filtro de período
+interface PeriodFilter {
+  startDate: string;
+  endDate: string;
+  type: 'month' | 'custom';
+}
+
 export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMonth }: DoctorDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'incomes' | 'expenses'>('summary');
   const [independentExpenses, setIndependentExpenses] = useState<Transaction[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(true);
+  const [showPeriodFilter, setShowPeriodFilter] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => {
+    // Se tiver selectedMonth, usar como filtro inicial
+    if (selectedMonth) {
+      const [year, month] = selectedMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = `${year}-${month}-${new Date(parseInt(year), parseInt(month), 0).getDate()}`;
+      return {
+        startDate,
+        endDate,
+        type: 'month' as const
+      };
+    }
+    // Caso contrário, usar último mês como padrão
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    return {
+      startDate: firstDay.toISOString().split('T')[0],
+      endDate: lastDay.toISOString().split('T')[0],
+      type: 'month' as const
+    };
+  });
 
   // Carregar despesas independentes do médico
   useEffect(() => {
@@ -91,13 +122,20 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('transactions')
           .select('*')
           .eq('user_id', user.id)
           .eq('type', 'expense')
           .eq('subcategory', doctorName)
           .order('date', { ascending: false });
+
+        // Aplicar filtro de período se existir
+        if (periodFilter.startDate && periodFilter.endDate) {
+          query = query.gte('date', periodFilter.startDate).lte('date', periodFilter.endDate);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -112,31 +150,41 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     };
 
     fetchIndependentExpenses();
-  }, [doctorName]);
+  }, [doctorName, periodFilter]);
 
-  const doctorTransfers = useMemo(() => {
+  // Filtrar transfers por período
+  const filteredTransfers = useMemo(() => {
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
 
-    if (selectedMonth) {
-      filtered = filtered.filter(t => t.reference_month === selectedMonth);
+    // Aplicar filtro de período
+    if (periodFilter.startDate && periodFilter.endDate) {
+      filtered = filtered.filter(t => {
+        const transferDate = new Date(t.date);
+        const startDate = new Date(periodFilter.startDate);
+        const endDate = new Date(periodFilter.endDate);
+        return transferDate >= startDate && transferDate <= endDate;
+      });
     }
 
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transfers, doctorName, selectedMonth]);
+  }, [transfers, doctorName, periodFilter]);
 
-  // Filtrar despesas independentes por mês se necessário
+  // Filtrar despesas independentes por período
   const filteredIndependentExpenses = useMemo(() => {
-    if (!selectedMonth) return independentExpenses;
-    return independentExpenses.filter(t => 
-      t.reference_month === selectedMonth || 
-      (!t.reference_month && t.date.startsWith(selectedMonth))
-    );
-  }, [independentExpenses, selectedMonth]);
+    if (!periodFilter.startDate || !periodFilter.endDate) return independentExpenses;
+    
+    return independentExpenses.filter(t => {
+      const expenseDate = new Date(t.date);
+      const startDate = new Date(periodFilter.startDate);
+      const endDate = new Date(periodFilter.endDate);
+      return expenseDate >= startDate && expenseDate <= endDate;
+    });
+  }, [independentExpenses, periodFilter]);
 
   // Entradas: todas as transações de medical_transfers (opções 1, 2, 3)
   const incomeTransfers = useMemo(() => {
-    return doctorTransfers.filter(t => t.option_type !== 'expense');
-  }, [doctorTransfers]);
+    return filteredTransfers.filter(t => t.option_type !== 'expense');
+  }, [filteredTransfers]);
 
   // Despesas associadas aos repasses médicos
   const transferExpenses = useMemo(() => {
@@ -154,7 +202,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       source: 'medical_transfer';
     }> = [];
 
-    doctorTransfers.forEach(t => {
+    filteredTransfers.forEach(t => {
       if (t.expense_amount > 0 && t.expense_category) {
         expenses.push({
           id: `transfer-expense-${t.id}`,
@@ -173,7 +221,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     });
 
     return expenses;
-  }, [doctorTransfers]);
+  }, [filteredTransfers]);
 
   // Despesas independentes da tabela transactions
   const independentExpenseDetails = useMemo(() => {
@@ -395,12 +443,59 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
   };
 
+  const formatPeriod = () => {
+    const start = new Date(periodFilter.startDate);
+    const end = new Date(periodFilter.endDate);
+    
+    if (periodFilter.type === 'month') {
+      return start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+    
+    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+  };
+
   // Mapeamentos para uso dentro do componente
   const paymentMethodIcons: Record<string, React.ReactNode> = {
     cash: <DollarSign size={14} />,
     pix: <span className="text-xs">PIX</span>,
     debit_card: <CreditCard size={14} />,
     credit_card: <CreditCard size={14} />
+  };
+
+  // Função para aplicar filtro de mês específico
+  const applyMonthFilter = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const startDate = `${year}-${monthNum}-01`;
+    const endDate = `${year}-${monthNum}-${new Date(parseInt(year), parseInt(monthNum), 0).getDate()}`;
+    
+    setPeriodFilter({
+      startDate,
+      endDate,
+      type: 'month'
+    });
+    setShowPeriodFilter(false);
+  };
+
+  // Função para aplicar filtro personalizado
+  const applyCustomFilter = () => {
+    setPeriodFilter(prev => ({
+      ...prev,
+      type: 'custom'
+    }));
+    setShowPeriodFilter(false);
+  };
+
+  // Função para limpar filtro
+  const clearFilter = () => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), 0, 1); // 1º de janeiro do ano atual
+    const lastDay = new Date(today.getFullYear(), 11, 31); // 31 de dezembro do ano atual
+    
+    setPeriodFilter({
+      startDate: firstDay.toISOString().split('T')[0],
+      endDate: lastDay.toISOString().split('T')[0],
+      type: 'month'
+    });
   };
 
  const generatePDF = () => {
@@ -437,9 +532,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   // Período
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  const periodText = selectedMonth ? 
-    `Período: ${formatMonth(selectedMonth)}` : 
-    'Período: Todos os meses';
+  const periodText = `Período: ${formatPeriod()}`;
   doc.text(periodText, pageWidth / 2, yPosition, { align: 'center' });
   yPosition += 15;
 
@@ -793,15 +886,23 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     // Médico
     const doctorShort = doctorName.length > 25 ? doctorName.substring(0, 25) + '...' : doctorName;
     doc.text(`Médico: ${doctorShort}`, pageWidth - margin - 80, footerY);
+    
+    // Período
+    const periodShort = periodFilter.type === 'month' ? 
+      formatMonthShort(periodFilter.startDate.substring(0, 7)) : 
+      'Período Personalizado';
+    doc.text(`Período: ${periodShort}`, pageWidth - margin - 80, footerY - 5);
   }
 
   // Salvar PDF
   const safeDoctorName = doctorName.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-  const safeMonth = selectedMonth ? selectedMonth.replace(/-/g, '_') : 'Todos';
+  const safeMonth = periodFilter.type === 'month' ? 
+    periodFilter.startDate.substring(0, 7).replace(/-/g, '_') : 
+    'Periodo_Personalizado';
   const fileName = `Repasse_${safeDoctorName}_${safeMonth}_${new Date().toISOString().slice(0, 10)}.pdf`;
   doc.save(fileName);
 };
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -811,11 +912,24 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
             <div>
               <h2 className="text-2xl font-bold text-gray-800">Detalhamento do Médico</h2>
               <p className="text-gray-600">{doctorName}</p>
-              {selectedMonth ? (
-                <p className="text-sm text-gray-500 capitalize">{formatMonth(selectedMonth)}</p>
-              ) : (
-                <p className="text-sm text-gray-500">Todos os períodos</p>
-              )}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">{formatPeriod()}</span>
+                <button
+                  onClick={() => setShowPeriodFilter(!showPeriodFilter)}
+                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
+                >
+                  <Filter size={14} />
+                  Alterar período
+                </button>
+                {(periodFilter.startDate || periodFilter.endDate) && (
+                  <button
+                    onClick={clearFilter}
+                    className="text-red-600 hover:text-red-800 text-sm"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -835,6 +949,74 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
             </button>
           </div>
         </div>
+
+        {/* Filtro de Período */}
+        {showPeriodFilter && (
+          <div className="border-b bg-gray-50 p-4">
+            <div className="max-w-md">
+              <h3 className="font-medium text-gray-700 mb-3">Filtrar por Período</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Inicial
+                  </label>
+                  <input
+                    type="date"
+                    value={periodFilter.startDate}
+                    onChange={(e) => setPeriodFilter(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data Final
+                  </label>
+                  <input
+                    type="date"
+                    value={periodFilter.endDate}
+                    onChange={(e) => setPeriodFilter(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={applyCustomFilter}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Aplicar Filtro
+                </button>
+                <button
+                  onClick={() => setShowPeriodFilter(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Filtros rápidos por mês:</p>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 6 }, (_, i) => {
+                    const date = new Date();
+                    date.setMonth(date.getMonth() - i);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const monthStr = `${year}-${month}`;
+                    return (
+                      <button
+                        key={monthStr}
+                        onClick={() => applyMonthFilter(monthStr)}
+                        className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                      >
+                        {formatMonthShort(monthStr)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="border-b px-6">
@@ -1297,8 +1479,8 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                   <Database size={14} />
                   Despesas: {allExpenses.length} ({transferExpenses.length} + {independentExpenseDetails.length})
                 </span>
+                <span>Período: {formatPeriod()}</span>
               </div>
-              {selectedMonth && ` • Período: ${formatMonth(selectedMonth)}`}
             </div>
             <button
               onClick={onClose}
