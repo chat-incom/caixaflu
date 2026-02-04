@@ -493,25 +493,29 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mês de Referência</label>
             <select
-              value={selectedMonth}
-              onChange={(e) => {
-                setSelectedMonth(e.target.value);
-                setSelectedDoctor('');
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Todos os meses</option>
-              {monthlyStats.map((stat) => {
-                const [year, month] = stat.month.split('-');
-                const date = new Date(parseInt(year), parseInt(month) - 1, 15);
-                return (
-                  <option key={stat.month} value={stat.month}>
-                    {date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+  value={selectedMonth}
+  onChange={(e) => {
+    setSelectedMonth(e.target.value);
+    setSelectedDoctor('');
+  }}
+  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+>
+  <option value="">Todos os meses</option>
+  {monthlyStats.map((stat) => {
+    const [year, month] = stat.month.split('-');
+    // Usar o dia 15 para evitar problemas com início/fim do mês
+    const date = new Date(parseInt(year), parseInt(month) - 1, 15);
+    return (
+      <option key={stat.month} value={stat.month}>
+        {date.toLocaleDateString('pt-BR', { 
+          month: 'long', 
+          year: 'numeric',
+          timeZone: 'UTC' // Forçar UTC para evitar fuso horário
+        })}
+      </option>
+    );
+  })}
+</select>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Médico</label>
