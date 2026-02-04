@@ -152,7 +152,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     fetchIndependentExpenses();
   }, [doctorName, periodFilter]);
 
-  // Filtrar transfers por período
+  // Filtrar transfers por período - INCLUINDO DESPESAS IMPUTADAS
   const filteredTransfers = useMemo(() => {
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
 
@@ -186,7 +186,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return filteredTransfers.filter(t => t.option_type !== 'expense');
   }, [filteredTransfers]);
 
-  // Despesas associadas aos repasses médicos
+  // Despesas imputadas do sistema de expansão (campo expense_amount > 0)
   const transferExpenses = useMemo(() => {
     const expenses: Array<{
       id: string;
@@ -200,22 +200,31 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       parent_transfer_type: string;
       parent_transfer_description: string;
       source: 'medical_transfer';
+      // Novo campo para indicar que foi imputada via sistema de expansão
+      imputado_sistema_expansao: boolean;
     }> = [];
 
     filteredTransfers.forEach(t => {
+      // Verifica se é uma despesa imputada do sistema de expansão
       if (t.expense_amount > 0 && t.expense_category) {
+        const isImputadaSistemaExpansao = t.option_type === 'expense' || 
+          (t.description && t.description.toLowerCase().includes('lançado via sistema'));
+        
         expenses.push({
           id: `transfer-expense-${t.id}`,
           date: t.date,
           reference_month: t.reference_month,
-          description: t.description || 'Despesa associada ao repasse',
+          description: t.description || (t.option_type === 'expense' ? 'Despesa imputada' : 'Despesa associada ao repasse'),
           amount: t.expense_amount,
           category: t.category,
           expense_category: t.expense_category,
           parent_transfer_id: t.id,
           parent_transfer_type: t.option_type,
-          parent_transfer_description: `${optionTypeLabels[t.option_type]} - ${t.category}`,
-          source: 'medical_transfer'
+          parent_transfer_description: t.option_type === 'expense' ? 
+            'Despesa imputada via sistema' : 
+            `${optionTypeLabels[t.option_type]} - ${t.category}`,
+          source: 'medical_transfer',
+          imputado_sistema_expansao: isImputadaSistemaExpansao
         });
       }
     });
@@ -234,23 +243,47 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       category: t.category,
       expense_category: t.subcategory || 'outros',
       source: 'transaction' as const,
-      transaction_id: t.id
+      transaction_id: t.id,
+      imputado_sistema_expansao: false // Não são imputadas via sistema de expansão
     }));
   }, [filteredIndependentExpenses]);
 
-  // Todas as despesas combinadas
+  // Todas as despesas combinadas - INCLUINDO AS IMPUTADAS
   const allExpenses = useMemo(() => {
-    return [...transferExpenses, ...independentExpenseDetails]
+    const combined = [...transferExpenses, ...independentExpenseDetails]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Agrupar por mês para análise
+    const monthlyExpenses: Record<string, typeof combined> = {};
+    combined.forEach(expense => {
+      const month = expense.reference_month;
+      if (!monthlyExpenses[month]) {
+        monthlyExpenses[month] = [];
+      }
+      monthlyExpenses[month].push(expense);
+    });
+    
+    return combined;
   }, [transferExpenses, independentExpenseDetails]);
 
-  // Cálculos atualizados incluindo ambas as fontes
+  // Despesas específicas imputadas via sistema de expansão
+  const imputadasSistemaExpansao = useMemo(() => {
+    return allExpenses.filter(expense => 
+      expense.source === 'medical_transfer' && 
+      (expense as any).imputado_sistema_expansao === true
+    );
+  }, [allExpenses]);
+
+  // Cálculos atualizados incluindo ambas as fontes E despesas imputadas
   const totals = useMemo(() => {
     // Entradas: net_amount de todas as transações médicas (opções 1, 2, 3)
     const income = incomeTransfers.reduce((acc, t) => acc + (Number(t.net_amount) || 0), 0);
     
-    // Despesas de repasses médicos
+    // Despesas de repasses médicos (incluindo imputadas)
     const transferExpenseTotal = transferExpenses.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    
+    // Despesas imputadas via sistema de expansão
+    const imputadasTotal = imputadasSistemaExpansao.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
     
     // Despesas independentes
     const independentExpenseTotal = independentExpenseDetails.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -264,6 +297,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return { 
       income, 
       transferExpenses: transferExpenseTotal,
+      imputadasExpansao: imputadasTotal,
       independentExpenses: independentExpenseTotal,
       totalExpenses,
       balance,
@@ -271,7 +305,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       totalDiscounts: incomeTransfers.reduce((acc, t) => 
         acc + (Number(t.discount_amount) || 0) + (Number(t.payment_discount_amount) || 0), 0)
     };
-  }, [incomeTransfers, transferExpenses, independentExpenseDetails]);
+  }, [incomeTransfers, transferExpenses, independentExpenseDetails, imputadasSistemaExpansao]);
 
   // Agrupamento de entradas por tipo
   const incomesByType = useMemo(() => {
@@ -281,6 +315,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       totalGross: number, 
       totalDiscounts: number,
       totalTransferExpenses: number,
+      totalImputadas: number,
       netTotal: number,
       count: number 
     }> = {};
@@ -294,6 +329,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
           totalGross: 0, 
           totalDiscounts: 0,
           totalTransferExpenses: 0,
+          totalImputadas: 0,
           netTotal: 0,
           count: 0 
         };
@@ -302,6 +338,14 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       grouped[type].totalGross += t.amount;
       grouped[type].totalDiscounts += t.discount_amount + t.payment_discount_amount;
       grouped[type].totalTransferExpenses += t.expense_amount || 0;
+      
+      // Verificar se a despesa associada foi imputada via sistema
+      const isImputada = t.expense_amount > 0 && (t.option_type === 'expense' || 
+        (t.description && t.description.toLowerCase().includes('lançado via sistema')));
+      if (isImputada) {
+        grouped[type].totalImputadas += t.expense_amount || 0;
+      }
+      
       grouped[type].netTotal += t.net_amount - (t.expense_amount || 0);
       grouped[type].total += t.net_amount;
       grouped[type].count++;
@@ -310,13 +354,14 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return grouped;
   }, [incomeTransfers]);
 
-  // Agrupamento de TODAS as despesas por categoria
+  // Agrupamento de TODAS as despesas por categoria - COM DESTAQUE PARA IMPUTADAS
   const expensesByCategory = useMemo(() => {
     const grouped: Record<string, { 
       transactions: typeof allExpenses, 
       total: number,
       transferCount: number,
       independentCount: number,
+      imputadasCount: number,
       count: number 
     }> = {};
 
@@ -328,6 +373,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
           total: 0,
           transferCount: 0,
           independentCount: 0,
+          imputadasCount: 0,
           count: 0 
         };
       }
@@ -337,6 +383,11 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       
       if (t.source === 'medical_transfer') {
         grouped[category].transferCount++;
+        
+        // Verificar se foi imputada via sistema
+        if ((t as any).imputado_sistema_expansao) {
+          grouped[category].imputadasCount++;
+        }
       } else {
         grouped[category].independentCount++;
       }
@@ -345,16 +396,18 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return grouped;
   }, [allExpenses]);
 
-  // Breakdwon mensal atualizado com ambas as fontes
+  // Breakdown mensal atualizado com ambas as fontes E despesas imputadas
   const monthlyBreakdown = useMemo(() => {
     const months: Record<string, { 
       incomes: number, 
       transferExpenses: number,
+      imputadasExpansao: number,
       independentExpenses: number,
       totalExpenses: number,
       balance: number,
       incomeCount: number,
       expenseCount: number,
+      imputadasCount: number,
       grossIncome: number,
       totalDiscounts: number
     }> = {};
@@ -366,11 +419,13 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         months[month] = { 
           incomes: 0, 
           transferExpenses: 0,
+          imputadasExpansao: 0,
           independentExpenses: 0,
           totalExpenses: 0,
           balance: 0,
           incomeCount: 0,
           expenseCount: 0,
+          imputadasCount: 0,
           grossIncome: 0,
           totalDiscounts: 0
         };
@@ -385,6 +440,14 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       if (t.expense_amount > 0) {
         months[month].transferExpenses += Number(t.expense_amount) || 0;
         months[month].expenseCount++;
+        
+        // Verificar se foi imputada via sistema
+        const isImputada = t.option_type === 'expense' || 
+          (t.description && t.description.toLowerCase().includes('lançado via sistema'));
+        if (isImputada) {
+          months[month].imputadasExpansao += Number(t.expense_amount) || 0;
+          months[month].imputadasCount++;
+        }
       }
     });
 
@@ -395,11 +458,13 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         months[month] = { 
           incomes: 0, 
           transferExpenses: 0,
+          imputadasExpansao: 0,
           independentExpenses: 0,
           totalExpenses: 0,
           balance: 0,
           incomeCount: 0,
           expenseCount: 0,
+          imputadasCount: 0,
           grossIncome: 0,
           totalDiscounts: 0
         };
@@ -536,7 +601,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   doc.text(periodText, pageWidth / 2, yPosition, { align: 'center' });
   yPosition += 15;
 
-  // Seção de Resumo Financeiro com layout lado a lado
+  // Seção de Resumo Financeiro com destaque para despesas imputadas
   checkPageBreak(30);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
@@ -559,8 +624,16 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   yPosition += lineHeight;
   doc.text(`Despesas de Repasses: -${formatCurrency(totals.transferExpenses)} (${transferExpenses.length})`, firstColumnX, yPosition);
   
+  // Destaque para despesas imputadas
+  if (totals.imputadasExpansao > 0) {
+    yPosition += lineHeight;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`  → Imputadas via Sistema: -${formatCurrency(totals.imputadasExpansao)} (${imputadasSistemaExpansao.length})`, firstColumnX, yPosition);
+    doc.setFont('helvetica', 'normal');
+  }
+  
   // Coluna direita
-  const rightColumnY = yPosition - (3 * lineHeight);
+  const rightColumnY = yPosition - (3 * lineHeight) - (totals.imputadasExpansao > 0 ? lineHeight : 0);
   doc.text(`Despesas Independentes: -${formatCurrency(totals.independentExpenses)} (${independentExpenseDetails.length})`, secondColumnX, rightColumnY);
   doc.text(`Total de Despesas: -${formatCurrency(totals.totalExpenses)} (${allExpenses.length})`, secondColumnX, rightColumnY + lineHeight);
   
@@ -569,6 +642,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   doc.text(`SALDO FINAL: ${formatCurrency(totals.balance)}`, secondColumnX, rightColumnY + (2 * lineHeight));
   
   yPosition += lineHeight * 2;
+  if (totals.imputadasExpansao > 0) yPosition += lineHeight;
   yPosition += 15;
 
   // Entradas por tipo com colunas mais largas (paisagem)
@@ -606,7 +680,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.line(margin, yPosition, pageWidth - margin, yPosition);
     yPosition += 6;
     
-    // Conteúdo da tabela
+    // Conteúdo da tabela com destaque para imputadas
     doc.setFont('helvetica', 'normal');
     Object.entries(incomesByType).forEach(([type, data]) => {
       checkPageBreak(10);
@@ -624,8 +698,17 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       // Descontos
       doc.text(formatCurrency(data.totalDiscounts), colPositions[3], yPosition);
       
-      // Despesas Associadas
-      doc.text(formatCurrency(data.totalTransferExpenses), colPositions[4], yPosition);
+      // Despesas Associadas (com destaque para imputadas)
+      if (data.totalImputadas > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(formatCurrency(data.totalTransferExpenses), colPositions[4], yPosition);
+        doc.setFontSize(8);
+        doc.text(`${formatCurrency(data.totalImputadas)} imputadas`, colPositions[4], yPosition + 4);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+      } else {
+        doc.text(formatCurrency(data.totalTransferExpenses), colPositions[4], yPosition);
+      }
       
       // Líquido
       doc.text(formatCurrency(data.netTotal), colPositions[5], yPosition);
@@ -636,7 +719,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     yPosition += 15;
   }
 
-  // Tabela de Despesas por Categoria (mais espaçosa em paisagem)
+  // Tabela de Despesas por Categoria com destaque para imputadas
   if (allExpenses.length > 0) {
     checkPageBreak(30);
     
@@ -648,7 +731,8 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('DESPESAS POR CATEGORIA', margin, yPosition);
-    yPosition += 10;
+    doc.text('(Despesas Imputadas via Sistema destacadas)', margin, yPosition + 5);
+    yPosition += 15;
     
     // Configurações de coluna para cada seção
     const categoryColWidths = [60, 30, 40]; // Categoria, Qtd, Total
@@ -665,7 +749,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.line(margin, yPosition, margin + leftSectionWidth, yPosition);
     yPosition += 6;
     
-    // Conteúdo do resumo por categoria
+    // Conteúdo do resumo por categoria com destaque para imputadas
     doc.setFont('helvetica', 'normal');
     Object.entries(expensesByCategory).forEach(([category, data]) => {
       checkPageBreak(8);
@@ -676,69 +760,90 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       const categoryLabel = expenseCategoryLabels[category] || category;
       doc.text(categoryLabel, margin, categoryY);
       
-      // Quantidade com origem
+      // Quantidade com origem e destaque para imputadas
       const qtdText = `${data.count} (${data.transferCount}R/${data.independentCount}I)`;
       doc.text(qtdText, margin + categoryColWidths[0], categoryY);
       
-      // Total
-      doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
+      // Total com destaque se tiver imputadas
+      if (data.imputadasCount > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text(`${data.imputadasCount} imputadas`, margin + categoryColWidths[0] + categoryColWidths[1], categoryY + 4);
+        doc.setFontSize(10);
+      } else {
+        doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
+      }
       
       yPosition += 8;
     });
     
     // Resetar Y para detalhes à direita
-    yPosition = margin + 40; // Posição inicial para detalhes
+    yPosition = margin + 40 + (Object.keys(expensesByCategory).length * 8);
     
     // Título da seção de detalhes
     doc.setFont('helvetica', 'bold');
-    doc.text('DETALHES DAS DESPESAS', rightSectionX, yPosition);
+    doc.text('DETALHES DAS DESPESAS IMPUTADAS', rightSectionX, yPosition);
     yPosition += 8;
     
     // Linha divisória
     doc.line(rightSectionX, yPosition, pageWidth - margin, yPosition);
     yPosition += 6;
     
-    // Detalhes das despesas
+    // Detalhes das despesas imputadas via sistema
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     
-    // Agrupar todas as despesas por tipo
-    const allExpensesList = allExpenses.slice(0, 15); // Limitar para caber
+    // Filtrar apenas as despesas imputadas
+    const imputadasList = imputadasSistemaExpansao.slice(0, 10); // Limitar para caber
     
-    allExpensesList.forEach((expense, index) => {
-      if (yPosition + 8 > pageHeight - margin) {
-        // Se não couber nesta página, criar nova página
-        doc.addPage('landscape');
-        yPosition = margin + 20;
+    if (imputadasList.length > 0) {
+      imputadasList.forEach((expense, index) => {
+        if (yPosition + 8 > pageHeight - margin) {
+          doc.addPage('landscape');
+          yPosition = margin + 20;
+          doc.setFontSize(9);
+        }
+        
+        const desc = expense.description.length > 40 ? 
+          expense.description.substring(0, 40) + '...' : expense.description;
+        
+        // Destaque para despesas imputadas
+        doc.setFont('helvetica', 'bold');
+        doc.text(`🔧 ${desc}`, rightSectionX, yPosition);
+        doc.setFont('helvetica', 'normal');
+        doc.text(formatCurrency(expense.amount), rightSectionX + detailColWidths[0], yPosition);
+        
+        // Informações adicionais
+        doc.setFontSize(8);
+        doc.text(`Categoria: ${expenseCategoryLabels[expense.expense_category || ''] || expense.expense_category}`, 
+                 rightSectionX, yPosition + 4);
+        doc.text(`Data: ${formatDate(expense.date)}`, rightSectionX + 80, yPosition + 4);
         doc.setFontSize(9);
+        
+        yPosition += 12;
+      });
+      
+      if (imputadasSistemaExpansao.length > 10) {
+        doc.text(`... e mais ${imputadasSistemaExpansao.length - 10} despesas imputadas`, rightSectionX, yPosition);
+        yPosition += 7;
       }
-      
-      const prefix = expense.source === 'medical_transfer' ? '🔄' : '💳';
-      const sourceAbbr = expense.source === 'medical_transfer' ? '(R)' : '(I)';
-      const desc = expense.description.length > 40 ? 
-        expense.description.substring(0, 40) + '...' : expense.description;
-      
-      doc.text(`${prefix} ${desc} ${sourceAbbr}`, rightSectionX, yPosition);
-      doc.text(formatCurrency(expense.amount), rightSectionX + detailColWidths[0], yPosition);
-      
-      yPosition += 7;
-    });
-    
-    if (allExpenses.length > 15) {
-      doc.text(`... e mais ${allExpenses.length - 15} despesas`, rightSectionX, yPosition);
+    } else {
+      doc.text('Nenhuma despesa imputada via sistema neste período', rightSectionX, yPosition);
       yPosition += 7;
     }
     
     yPosition = Math.max(yPosition, margin + 40 + (Object.keys(expensesByCategory).length * 8) + 20);
   }
 
-  // Detalhamento por Mês com tabela completa
+  // Detalhamento por Mês com destaque para despesas imputadas
   if (monthlyBreakdown.length > 0) {
     checkPageBreak(40);
     
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('DETALHAMENTO POR MÊS', margin, yPosition);
+    doc.text('DETALHAMENTO POR MÊS (Despesas Imputadas destacadas)', margin, yPosition);
     yPosition += 10;
     
     // Colunas ajustadas para paisagem
@@ -769,8 +874,8 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     
     // Conteúdo
     doc.setFont('helvetica', 'normal');
-    monthlyBreakdown.forEach(({ month, incomes, transferExpenses, independentExpenses, totalExpenses, balance, incomeCount }) => {
-      checkPageBreak(10);
+    monthlyBreakdown.forEach(({ month, incomes, transferExpenses, imputadasExpansao, independentExpenses, totalExpenses, balance, incomeCount, imputadasCount }) => {
+      checkPageBreak(12);
       
       // Mês completo
       const monthText = formatMonthShort(month);
@@ -783,8 +888,17 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       doc.text(`${incomeCount} trans.`, monthColPositions[1], yPosition + 4);
       doc.setFontSize(10);
       
-      // Despesas de Repasses
-      doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
+      // Despesas de Repasses com destaque para imputadas
+      if (imputadasCount > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text(`${formatCurrency(imputadasExpansao)} imputadas`, monthColPositions[2], yPosition + 4);
+        doc.setFontSize(10);
+      } else {
+        doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
+      }
       
       // Despesas Independentes
       doc.text(formatCurrency(independentExpenses), monthColPositions[3], yPosition);
@@ -814,6 +928,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('VISUALIZAÇÃO POR MÊS', margin, yPosition);
+    doc.text('(Despesas Imputadas em destaque)', margin, yPosition + 5);
     yPosition += 15;
     
     // Configurações do gráfico
@@ -844,6 +959,13 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       doc.setFillColor(255, 0, 0);
       doc.rect(barX + barWidth * 0.4, chartY + chartHeight - expenseHeight, barWidth * 0.4, expenseHeight, 'F');
       
+      // Barra de despesas imputadas (laranja) dentro da barra de despesas
+      if (monthData.imputadasExpansao > 0) {
+        const imputadasHeight = monthData.imputadasExpansao * scale;
+        doc.setFillColor(255, 165, 0); // Laranja
+        doc.rect(barX + barWidth * 0.4, chartY + chartHeight - imputadasHeight, barWidth * 0.4, imputadasHeight, 'F');
+      }
+      
       // Nome do mês (abreviado)
       const monthLabel = monthData.month.split('-')[1] + '/' + monthData.month.split('-')[0].slice(2);
       doc.setFontSize(8);
@@ -860,6 +982,10 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     doc.setFillColor(255, 0, 0);
     doc.rect(margin + 60, yPosition, 8, 8, 'F');
     doc.text('Despesas', margin + 72, yPosition + 6);
+    
+    doc.setFillColor(255, 165, 0);
+    doc.rect(margin + 120, yPosition, 8, 8, 'F');
+    doc.text('Despesas Imputadas', margin + 132, yPosition + 6);
   }
 
   // Rodapé em todas as páginas
@@ -892,6 +1018,11 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       formatMonthShort(periodFilter.startDate.substring(0, 7)) : 
       'Período Personalizado';
     doc.text(`Período: ${periodShort}`, pageWidth - margin - 80, footerY - 5);
+    
+    // Informação sobre despesas imputadas
+    if (imputadasSistemaExpansao.length > 0) {
+      doc.text(`Despesas Imputadas: ${imputadasSistemaExpansao.length}`, margin, footerY - 5);
+    }
   }
 
   // Salvar PDF
@@ -1038,13 +1169,18 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               className={`py-3 px-4 font-medium border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
               Despesas ({allExpenses.length})
+              {imputadasSistemaExpansao.length > 0 && (
+                <span className="ml-1 text-xs bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded-full">
+                  {imputadasSistemaExpansao.length} imputadas
+                </span>
+              )}
             </button>
           </div>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          {/* Cards de Resumo atualizados */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          {/* Cards de Resumo atualizados com destaque para despesas imputadas */}
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Valor Bruto</span>
@@ -1084,6 +1220,18 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               </div>
             </div>
 
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-yellow-700">Despesas Imputadas</span>
+                <Database className="text-yellow-600" size={20} />
+              </div>
+              <p className="text-2xl font-bold text-yellow-600">-{formatCurrency(totals.imputadasExpansao)}</p>
+              <div className="text-xs text-yellow-600 mt-1 space-y-1">
+                <p>Via Sistema: {imputadasSistemaExpansao.length}</p>
+                <p>{((totals.imputadasExpansao / totals.totalExpenses) * 100).toFixed(1)}% do total</p>
+              </div>
+            </div>
+
             <div className={`border rounded-lg p-4 ${totals.balance >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className={`text-sm font-medium ${totals.balance >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
@@ -1103,11 +1251,16 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
           {/* Conteúdo das Tabs */}
           {activeTab === 'summary' && (
             <div className="space-y-6">
-              {/* Breakdown por Mês */}
+              {/* Breakdown por Mês com destaque para despesas imputadas */}
               <div>
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <Calendar className="text-blue-600" size={20} />
                   Desempenho por Mês
+                  {imputadasSistemaExpansao.length > 0 && (
+                    <span className="text-sm bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                      {imputadasSistemaExpansao.length} despesas imputadas
+                    </span>
+                  )}
                 </h3>
                 {monthlyBreakdown.length > 0 ? (
                   <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -1122,7 +1275,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {monthlyBreakdown.map(({ month, incomes, transferExpenses, independentExpenses, balance, incomeCount }) => (
+                        {monthlyBreakdown.map(({ month, incomes, transferExpenses, imputadasExpansao, independentExpenses, balance, incomeCount, imputadasCount }) => (
                           <tr key={month} className="hover:bg-gray-50">
                             <td className="py-3 px-4">
                               <span className="font-medium">{formatMonthShort(month)}</span>
@@ -1136,7 +1289,11 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                             <td className="py-3 px-4">
                               <div>
                                 <p className="font-medium text-orange-600">{formatCurrency(transferExpenses)}</p>
-                                <p className="text-xs text-gray-500">Associadas</p>
+                                {imputadasCount > 0 && (
+                                  <div className="text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded mt-1">
+                                    {imputadasCount} imputada(s): {formatCurrency(imputadasExpansao)}
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="py-3 px-4">
@@ -1162,7 +1319,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                 )}
               </div>
 
-              {/* Resumo por Tipo atualizado */}
+              {/* Resumo por Tipo atualizado com destaque para despesas imputadas */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Entradas por Tipo */}
                 <div>
@@ -1193,10 +1350,18 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                               <span className="font-medium">-{formatCurrency(data.totalDiscounts)}</span>
                             </div>
                             {data.totalTransferExpenses > 0 && (
-                              <div className="flex justify-between text-orange-600">
-                                <span>Despesas Associadas:</span>
-                                <span className="font-medium">-{formatCurrency(data.totalTransferExpenses)}</span>
-                              </div>
+                              <>
+                                <div className="flex justify-between text-orange-600">
+                                  <span>Despesas Associadas:</span>
+                                  <span className="font-medium">-{formatCurrency(data.totalTransferExpenses)}</span>
+                                </div>
+                                {data.totalImputadas > 0 && (
+                                  <div className="flex justify-between text-yellow-700 font-medium bg-yellow-50 p-2 rounded">
+                                    <span>→ Imputadas via Sistema:</span>
+                                    <span>-{formatCurrency(data.totalImputadas)}</span>
+                                  </div>
+                                )}
+                              </>
                             )}
                             <div className="flex justify-between text-green-700 font-semibold border-t pt-2">
                               <span>Valor Líquido Final:</span>
@@ -1213,24 +1378,31 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                   )}
                 </div>
 
-                {/* Despesas por Categoria */}
+                {/* Despesas por Categoria com destaque para imputadas */}
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 mb-4">Despesas por Categoria</h3>
                   {Object.keys(expensesByCategory).length > 0 ? (
                     <div className="space-y-4">
                       {Object.entries(expensesByCategory).map(([category, data]) => (
-                        <div key={category} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div key={category} className={`border rounded-lg p-4 ${
+                          data.imputadasCount > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
+                        }`}>
                           <div className="flex justify-between items-center mb-3">
                             <div>
-                              <h4 className="font-semibold text-red-800">
+                              <h4 className="font-semibold text-gray-800">
                                 {expenseCategoryLabels[category] || category}
+                                {data.imputadasCount > 0 && (
+                                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                    {data.imputadasCount} imputada(s)
+                                  </span>
+                                )}
                               </h4>
-                              <div className="flex gap-2 text-xs text-red-600">
+                              <div className="flex gap-2 text-xs text-gray-600">
                                 {data.transferCount > 0 && (
                                   <span className="bg-red-100 px-2 py-1 rounded">Repasses: {data.transferCount}</span>
                                 )}
                                 {data.independentCount > 0 && (
-                                  <span className="bg-red-100 px-2 py-1 rounded">Indep: {data.independentCount}</span>
+                                  <span className="bg-purple-100 px-2 py-1 rounded">Indep: {data.independentCount}</span>
                                 )}
                               </div>
                             </div>
@@ -1240,31 +1412,38 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                             </div>
                           </div>
                           <div className="space-y-2">
-                            {data.transactions.slice(0, 3).map((t) => (
-                              <div key={t.id} className="bg-white rounded p-3 text-sm">
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`text-xs px-2 py-1 rounded ${
-                                        t.source === 'medical_transfer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                                      }`}>
-                                        {getExpenseSourceLabel(t.source)}
-                                      </span>
+                            {data.transactions.slice(0, 3).map((t) => {
+                              const isImputada = (t as any).imputado_sistema_expansao === true;
+                              return (
+                                <div key={t.id} className={`bg-white rounded p-3 text-sm border ${
+                                  isImputada ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200'
+                                }`}>
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-xs px-2 py-1 rounded ${
+                                          t.source === 'medical_transfer' ? 
+                                            isImputada ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800' 
+                                            : 'bg-purple-100 text-purple-800'
+                                        }`}>
+                                          {isImputada ? '🔧 Imputada via Sistema' : getExpenseSourceLabel(t.source)}
+                                        </span>
+                                      </div>
+                                      <p className="font-medium text-gray-800">{t.description}</p>
+                                      <p className="text-xs text-gray-500">{formatDate(t.date)}</p>
+                                      {t.source === 'medical_transfer' && (
+                                        <p className="text-xs text-blue-600 mt-1">
+                                          Repasse: {(t as any).parent_transfer_description}
+                                        </p>
+                                      )}
                                     </div>
-                                    <p className="font-medium text-gray-800">{t.description}</p>
-                                    <p className="text-xs text-gray-500">{formatDate(t.date)}</p>
-                                    {t.source === 'medical_transfer' && (
-                                      <p className="text-xs text-blue-600 mt-1">
-                                        Repasse: {(t as any).parent_transfer_description}
-                                      </p>
-                                    )}
+                                    <span className="font-semibold text-red-600 ml-2">
+                                      {formatCurrency(t.amount)}
+                                    </span>
                                   </div>
-                                  <span className="font-semibold text-red-600 ml-2">
-                                    {formatCurrency(t.amount)}
-                                  </span>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                             {data.transactions.length > 3 && (
                               <p className="text-center text-xs text-gray-500 py-2">
                                 ... e mais {data.transactions.length - 3} transações
@@ -1281,6 +1460,61 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                   )}
                 </div>
               </div>
+
+              {/* Seção específica para despesas imputadas via sistema */}
+              {imputadasSistemaExpansao.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Database className="text-yellow-600" size={20} />
+                    Despesas Imputadas via Sistema de Expansão
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-white rounded-lg p-4 border border-yellow-300">
+                      <p className="text-sm font-medium text-gray-700">Total Imputado</p>
+                      <p className="text-2xl font-bold text-yellow-600">{formatCurrency(totals.imputadasExpansao)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-yellow-300">
+                      <p className="text-sm font-medium text-gray-700">Quantidade</p>
+                      <p className="text-2xl font-bold text-yellow-600">{imputadasSistemaExpansao.length}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-yellow-300">
+                      <p className="text-sm font-medium text-gray-700">Percentual do Total</p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {((totals.imputadasExpansao / totals.totalExpenses) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {imputadasSistemaExpansao.slice(0, 5).map((expense) => (
+                      <div key={expense.id} className="bg-white rounded-lg p-4 border border-yellow-300">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                🔧 Imputada via Sistema
+                              </span>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                {expenseCategoryLabels[expense.expense_category || ''] || expense.expense_category}
+                              </span>
+                            </div>
+                            <p className="font-medium text-gray-800">{expense.description}</p>
+                            <p className="text-sm text-gray-500">{formatDate(expense.date)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-red-600">{formatCurrency(expense.amount)}</p>
+                            <p className="text-xs text-gray-500">Mês ref: {formatMonthShort(expense.reference_month)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {imputadasSistemaExpansao.length > 5 && (
+                      <p className="text-center text-sm text-gray-600">
+                        ... e mais {imputadasSistemaExpansao.length - 5} despesas imputadas via sistema
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1291,76 +1525,97 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                 <span className="text-sm text-gray-500">
                   {incomeTransfers.length} repasse(s) • 
                   {transferExpenses.length > 0 && ` ${transferExpenses.length} com despesa associada`}
+                  {imputadasSistemaExpansao.length > 0 && ` • ${imputadasSistemaExpansao.length} com despesa imputada`}
                 </span>
               </div>
               
               {incomeTransfers.length > 0 ? (
                 <div className="space-y-4">
-                  {incomeTransfers.map((t) => (
-                    <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
-                      t.expense_amount > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200'
-                    }`}>
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-blue-600">
-                              {optionTypeLabels[t.option_type]}
-                            </span>
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                              {t.category}
-                            </span>
-                            <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded flex items-center gap-1">
-                              {paymentMethodIcons[t.payment_method]}
-                              {paymentMethodLabels[t.payment_method]}
-                            </span>
-                            {t.expense_amount > 0 && (
-                              <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded flex items-center gap-1">
-                                <TrendingDown size={12} />
-                                Com despesa
+                  {incomeTransfers.map((t) => {
+                    const temDespesaImputada = t.expense_amount > 0 && 
+                      (t.option_type === 'expense' || 
+                       (t.description && t.description.toLowerCase().includes('lançado via sistema')));
+                    
+                    return (
+                      <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
+                        temDespesaImputada ? 'border-yellow-300 bg-yellow-50' : 
+                        t.expense_amount > 0 ? 'border-orange-200 bg-orange-50' : 'border-gray-200'
+                      }`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-blue-600">
+                                {optionTypeLabels[t.option_type]}
                               </span>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                {t.category}
+                              </span>
+                              <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded flex items-center gap-1">
+                                {paymentMethodIcons[t.payment_method]}
+                                {paymentMethodLabels[t.payment_method]}
+                              </span>
+                              {temDespesaImputada && (
+                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded flex items-center gap-1">
+                                  <Database size={12} />
+                                  Despesa imputada
+                                </span>
+                              )}
+                              {t.expense_amount > 0 && !temDespesaImputada && (
+                                <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded flex items-center gap-1">
+                                  <TrendingDown size={12} />
+                                  Com despesa
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-800">{t.description || 'Sem descrição'}</p>
+                            <p className="text-sm text-gray-500">{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-green-600">{formatCurrency(t.net_amount)}</p>
+                            <p className="text-sm text-gray-500">Líquido</p>
+                            {t.expense_amount > 0 && (
+                              <p className={`text-xs font-medium mt-1 ${
+                                temDespesaImputada ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                -{formatCurrency(t.expense_amount)} em despesas
+                                {temDespesaImputada && ' (imputada)'}
+                              </p>
                             )}
                           </div>
-                          <p className="text-gray-800">{t.description || 'Sem descrição'}</p>
-                          <p className="text-sm text-gray-500">{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-green-600">{formatCurrency(t.net_amount)}</p>
-                          <p className="text-sm text-gray-500">Líquido</p>
-                          {t.expense_amount > 0 && (
-                            <p className="text-xs text-red-600 font-medium mt-1">
-                              -{formatCurrency(t.expense_amount)} em despesas
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white rounded-lg p-3 space-y-3 text-sm border">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <div className="flex justify-between mb-1">
-                              <span className="text-gray-600">Valor Bruto:</span>
-                              <span className="font-medium">{formatCurrency(t.amount)}</span>
-                            </div>
-                            <div className="flex justify-between mb-1">
-                              <span className="text-gray-600">Desconto NF ({t.discount_percentage}%):</span>
-                              <span className="text-red-600 font-medium">-{formatCurrency(t.discount_amount)}</span>
-                            </div>
-                            {t.payment_discount_amount > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Desconto Pagamento ({t.payment_discount_percentage}%):</span>
-                                <span className="text-red-600 font-medium">-{formatCurrency(t.payment_discount_amount)}</span>
+                        
+                        <div className="bg-white rounded-lg p-3 space-y-3 text-sm border">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex justify-between mb-1">
+                                <span className="text-gray-600">Valor Bruto:</span>
+                                <span className="font-medium">{formatCurrency(t.amount)}</span>
                               </div>
-                            )}
-                          </div>
-                          <div className="md:border-l md:pl-4">
-                            <div className="flex justify-between mb-1">
-                              <span className="text-gray-600">Total Descontos:</span>
-                              <span className="text-red-600 font-bold">
-                                -{formatCurrency(t.discount_amount + t.payment_discount_amount)}
-                              </span>
+                              <div className="flex justify-between mb-1">
+                                <span className="text-gray-600">Desconto NF ({t.discount_percentage}%):</span>
+                                <span className="text-red-600 font-medium">-{formatCurrency(t.discount_amount)}</span>
+                              </div>
+                              {t.payment_discount_amount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Desconto Pagamento ({t.payment_discount_percentage}%):</span>
+                                  <span className="text-red-600 font-medium">-{formatCurrency(t.payment_discount_amount)}</span>
+                                </div>
+                              )}
                             </div>
-                            {t.expense_amount > 0 && (
-                              <>
+                            <div className="md:border-l md:pl-4">
+                              <div className="flex justify-between mb-1">
+                                <span className="text-gray-600">Total Descontos:</span>
+                                <span className="text-red-600 font-bold">
+                                  -{formatCurrency(t.discount_amount + t.payment_discount_amount)}
+                                </span>
+                              </div>
+                              {t.expense_amount > 0 && (
+                                <>
+                                  <div className={`flex justify-between mb-1 ${
+                                    temDespesaImputada ? 'text-yellow-700 font-medium' : 'text-red-600'
+                                  }`}>
+                                    <span>
+                                                                   
                                 <div className="flex justify-between mb-1">
                                   <span className="text-gray-600">Despesa Associada:</span>
                                   <span className="text-red-600 font-bold">
@@ -1397,100 +1652,198 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
             </div>
           )}
 
-          {activeTab === 'expenses' && (
+                {activeTab === 'expenses' && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
             <div>
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">Detalhamento de Despesas</h3>
-                  <div className="flex gap-4 mt-1 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-3 bg-blue-500 rounded"></span>
-                      Associadas a Repasses: {transferExpenses.length}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-3 bg-purple-500 rounded"></span>
-                      Independentes: {independentExpenseDetails.length}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-sm text-gray-500">Total: {allExpenses.length} transação(ões)</span>
+              <h3 className="text-lg font-bold text-gray-800">Detalhamento de Despesas</h3>
+              <div className="flex gap-4 mt-1 text-sm text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 bg-blue-500 rounded"></span>
+                  Associadas a Repasses: {transferExpenses.length}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 bg-yellow-500 rounded"></span>
+                  Imputadas via Sistema: {imputadasSistemaExpansao.length}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 bg-purple-500 rounded"></span>
+                  Independentes: {independentExpenseDetails.length}
+                </span>
+              </div>
+            </div>
+            <span className="text-sm text-gray-500">Total: {allExpenses.length} transação(ões)</span>
+          </div>
+          
+          {loadingExpenses ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Carregando despesas...</p>
+            </div>
+          ) : allExpenses.length > 0 ? (
+            <div className="space-y-4">
+              {/* Filtros para despesas */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    // Mostrar todas
+                    // Esta lógica precisaria ser implementada com estado adicional
+                  }}
+                  className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-lg"
+                >
+                  Todas ({allExpenses.length})
+                </button>
+                <button
+                  onClick={() => {
+                    // Filtrar apenas imputadas
+                    // Esta lógica precisaria ser implementada com estado adicional
+                  }}
+                  className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded-lg"
+                >
+                  Imputadas ({imputadasSistemaExpansao.length})
+                </button>
+                <button
+                  onClick={() => {
+                    // Filtrar apenas independentes
+                    // Esta lógica precisaria ser implementada com estado adicional
+                  }}
+                  className="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg"
+                >
+                  Independentes ({independentExpenseDetails.length})
+                </button>
               </div>
               
-              {loadingExpenses ? (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-500">Carregando despesas...</p>
-                </div>
-              ) : allExpenses.length > 0 ? (
-                <div className="space-y-4">
-                  {allExpenses.map((t) => (
-                    <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
-                      t.source === 'medical_transfer' ? 'border-blue-200' : 'border-purple-200'
-                    }`}>
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-red-600">
-                              {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
+              {allExpenses.map((t) => {
+                const isImputada = (t as any).imputado_sistema_expansao === true;
+                return (
+                  <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
+                    isImputada ? 'border-yellow-300 bg-yellow-50' :
+                    t.source === 'medical_transfer' ? 'border-blue-200' : 'border-purple-200'
+                  }`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-red-600">
+                            {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
+                          </span>
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            isImputada ? 'bg-yellow-100 text-yellow-800' :
+                            t.source === 'medical_transfer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {isImputada ? '🔧 Imputada via Sistema' : getExpenseSourceLabel(t.source)}
+                          </span>
+                          {isImputada && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                              Mês ref: {formatMonthShort(t.reference_month)}
                             </span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              t.source === 'medical_transfer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                            }`}>
-                              {getExpenseSourceLabel(t.source)}
-                            </span>
-                          </div>
-                          <p className="text-gray-800">{t.description}</p>
-                          <div className="text-sm text-gray-500">
-                            <p>{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
-                            {t.source === 'medical_transfer' && (
-                              <p className="text-blue-600 mt-1">
-                                Repasse original: {(t as any).parent_transfer_description}
-                              </p>
-                            )}
-                          </div>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-red-600">{formatCurrency(t.amount)}</p>
-                          <p className="text-sm text-gray-500">Valor da Despesa</p>
+                        <p className="text-gray-800">{t.description}</p>
+                        <div className="text-sm text-gray-500">
+                          <p>{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
+                          {t.source === 'medical_transfer' && !isImputada && (
+                            <p className="text-blue-600 mt-1">
+                              Repasse original: {(t as any).parent_transfer_description}
+                            </p>
+                          )}
+                          {isImputada && (
+                            <p className="text-yellow-600 mt-1">
+                              Despesa lançada via sistema de expansão
+                            </p>
+                          )}
                         </div>
                       </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-red-600">{formatCurrency(t.amount)}</p>
+                        <p className="text-sm text-gray-500">Valor da Despesa</p>
+                        {isImputada && (
+                          <p className="text-xs text-yellow-600 font-medium mt-1">
+                            Lançada via sistema
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-                  <TrendingDown className="mx-auto text-gray-400 mb-4" size={48} />
-                  <p className="text-gray-500 text-lg mb-2">Nenhuma despesa registrada</p>
-                  <p className="text-gray-400">
-                    As despesas podem ser adicionadas através de repasses médicos ou transações independentes
-                  </p>
-                </div>
-              )}
+                    
+                    {/* Informações adicionais para despesas imputadas */}
+                    {isImputada && (
+                      <div className="bg-white rounded-lg p-3 text-sm border border-yellow-200 mt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Database size={16} className="text-yellow-600" />
+                          <span className="font-medium text-yellow-700">Informações da Despesa Imputada</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-gray-600">Data do Lançamento:</p>
+                            <p className="font-medium">{formatDate(t.date)}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Mês de Referência:</p>
+                            <p className="font-medium">{formatMonth(t.reference_month)}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Categoria:</p>
+                            <p className="font-medium">{expenseCategoryLabels[t.expense_category || ''] || t.expense_category}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Origem:</p>
+                            <p className="font-medium text-yellow-600">Sistema de Expansão</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+              <TrendingDown className="mx-auto text-gray-400 mb-4" size={48} />
+              <p className="text-gray-500 text-lg mb-2">Nenhuma despesa registrada</p>
+              <p className="text-gray-400">
+                As despesas podem ser adicionadas através de repasses médicos ou transações independentes
+              </p>
+              <div className="mt-4 text-sm text-gray-500">
+                <p>Para adicionar despesas imputadas via sistema:</p>
+                <p className="text-xs">1. Vá para a lista de repasses</p>
+                <p className="text-xs">2. Clique em "Ver mais" no médico desejado</p>
+                <p className="text-xs">3. Use o sistema de expansão para lançar despesas</p>
+              </div>
             </div>
           )}
         </div>
+      )}
+    </div>
 
-        <div className="border-t p-4 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-500">
-              <div className="flex items-center gap-4">
-                <span>Repasses: {incomeTransfers.length}</span>
-                <span className="flex items-center gap-1">
-                  <Database size={14} />
-                  Despesas: {allExpenses.length} ({transferExpenses.length} + {independentExpenseDetails.length})
+    <div className="border-t p-4 bg-gray-50">
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-gray-500">
+          <div className="flex items-center gap-4">
+            <span>Repasses: {incomeTransfers.length}</span>
+            <span className="flex items-center gap-1">
+              <Database size={14} />
+              Despesas: {allExpenses.length} 
+              ({transferExpenses.length}R/{independentExpenseDetails.length}I)
+              {imputadasSistemaExpansao.length > 0 && (
+                <span className="text-yellow-600 ml-1">
+                  • {imputadasSistemaExpansao.length} imputadas
                 </span>
-                <span>Período: {formatPeriod()}</span>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
-            >
-              Fechar
-            </button>
+              )}
+            </span>
+            <span>Período: {formatPeriod()}</span>
           </div>
+          {imputadasSistemaExpansao.length > 0 && (
+            <div className="mt-2 text-xs text-yellow-700 bg-yellow-100 px-3 py-1 rounded inline-block">
+              🔧 {imputadasSistemaExpansao.length} despesas foram imputadas via sistema de expansão
+            </div>
+          )}
         </div>
+        <button
+          onClick={onClose}
+          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
+        >
+          Fechar
+        </button>
       </div>
     </div>
-  );
-}
+  </div>
+</div>
