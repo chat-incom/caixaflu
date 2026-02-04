@@ -492,9 +492,17 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     }).format(value);
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date + 'T00:00:00').toLocaleDateString('pt-BR');
-  };
+ // Corrigir a função formatDate para evitar problemas de fuso horário
+const formatDate = (dateString: string) => {
+  try {
+    // Dividir a data e criar manualmente para evitar fuso horário
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return date.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return dateString;
+  }
+};
 
   const formatMonth = (month: string) => {
     const [year, monthNum] = month.split('-');
@@ -527,41 +535,89 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     credit_card: <CreditCard size={14} />
   };
 
-  // Função para aplicar filtro de mês específico
-  const applyMonthFilter = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const startDate = `${year}-${monthNum}-01`;
-    const endDate = `${year}-${monthNum}-${new Date(parseInt(year), parseInt(monthNum), 0).getDate()}`;
-    
-    setPeriodFilter({
-      startDate,
-      endDate,
-      type: 'month'
-    });
-    setShowPeriodFilter(false);
-  };
+  // No DoctorDetailsModal, corrigir as funções de filtro
 
-  // Função para aplicar filtro personalizado
-  const applyCustomFilter = () => {
-    setPeriodFilter(prev => ({
-      ...prev,
-      type: 'custom'
-    }));
-    setShowPeriodFilter(false);
-  };
+// 1. Corrigir a função applyMonthFilter
+const applyMonthFilter = (month: string) => {
+  const [year, monthNum] = month.split('-');
+  
+  // Criar data no primeiro dia do mês
+  const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+  // Último dia do mês
+  const endDate = new Date(parseInt(year), parseInt(monthNum), 0);
+  
+  setPeriodFilter({
+    startDate: startDate.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0],
+    type: 'month'
+  });
+  setShowPeriodFilter(false);
+};
 
-  // Função para limpar filtro
-  const clearFilter = () => {
-    const today = new Date();
-    const firstDay = new Date(today.getFullYear(), 0, 1); // 1º de janeiro do ano atual
-    const lastDay = new Date(today.getFullYear(), 11, 31); // 31 de dezembro do ano atual
-    
-    setPeriodFilter({
-      startDate: firstDay.toISOString().split('T')[0],
-      endDate: lastDay.toISOString().split('T')[0],
-      type: 'month'
+// 2. Corrigir o filtro nas transferências
+const filteredTransfers = useMemo(() => {
+  let filtered = transfers.filter(t => t.doctor_name === doctorName);
+
+  // Aplicar filtro de período corrigido
+  if (periodFilter.startDate && periodFilter.endDate) {
+    filtered = filtered.filter(t => {
+      const transferDate = new Date(t.date);
+      const startDate = new Date(periodFilter.startDate);
+      const endDate = new Date(periodFilter.endDate);
+      
+      // Definir horários para garantir inclusão completa do dia
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      
+      return transferDate >= startDate && transferDate <= endDate;
     });
+  }
+
+  return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}, [transfers, doctorName, periodFilter]);
+
+// 3. Corrigir também para despesas independentes
+const filteredIndependentExpenses = useMemo(() => {
+  if (!periodFilter.startDate || !periodFilter.endDate) return independentExpenses;
+  
+  return independentExpenses.filter(t => {
+    const expenseDate = new Date(t.date);
+    const startDate = new Date(periodFilter.startDate);
+    const endDate = new Date(periodFilter.endDate);
+    
+    // Ajustar horários
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    return expenseDate >= startDate && expenseDate <= endDate;
+  });
+}, [independentExpenses, periodFilter]);
+
+// 4. Corrigir a inicialização do período
+const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => {
+  if (selectedMonth) {
+    const [year, month] = selectedMonth.split('-');
+    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const endDate = new Date(parseInt(year), parseInt(month), 0);
+    
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      type: 'month' as const
+    };
+  }
+  
+  // Caso contrário, usar último mês como padrão
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  
+  return {
+    startDate: firstDay.toISOString().split('T')[0],
+    endDate: lastDay.toISOString().split('T')[0],
+    type: 'month' as const
   };
+});
 
  const generatePDF = () => {
   // Configurar PDF em modo paisagem (landscape)
@@ -1126,28 +1182,29 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               </div>
               <div className="mt-4">
                 <p className="text-sm text-gray-600 mb-2">Filtros rápidos por mês:</p>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: 6 }, (_, i) => {
-                    const date = new Date();
-                    date.setMonth(date.getMonth() - i);
-                    const year = date.getFullYear();
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const monthStr = `${year}-${month}`;
-                    return (
-                      <button
-                        key={monthStr}
-                        onClick={() => applyMonthFilter(monthStr)}
-                        className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                      >
-                        {formatMonthShort(monthStr)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                // No filtro rápido por mês, garantir a ordem correta
+<div className="flex flex-wrap gap-2">
+  {Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - i);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Mês base 1
+    
+    // Ajustar para mostrar corretamente
+    date.setDate(15); // Dia do meio para evitar problemas de borda
+    const monthStr = `${year}-${month}`;
+    
+    return (
+      <button
+        key={monthStr}
+        onClick={() => applyMonthFilter(monthStr)}
+        className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+      >
+        {date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+      </button>
+    );
+  })}
+</div>
 
         {/* Tabs */}
         <div className="border-b px-6">
