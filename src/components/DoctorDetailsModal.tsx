@@ -58,7 +58,6 @@ const expenseCategoryLabels: Record<string, string> = {
   medicacao: 'Medicação',
   insumo: 'Insumo',
   outros: 'Outros',
-  // Categorias da tabela transactions
   fixed: 'Despesa Fixa',
   variable: 'Despesa Variável',
   repasse_medico: 'Repasse Médico',
@@ -91,19 +90,21 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   const [independentExpenses, setIndependentExpenses] = useState<Transaction[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(true);
   const [showPeriodFilter, setShowPeriodFilter] = useState(false);
+  
+  // Inicialização do periodFilter - UMA ÚNICA DECLARAÇÃO
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => {
-    // Se tiver selectedMonth, usar como filtro inicial
     if (selectedMonth) {
       const [year, month] = selectedMonth.split('-');
-      const startDate = `${year}-${month}-01`;
-      const endDate = `${year}-${month}-${new Date(parseInt(year), parseInt(month), 0).getDate()}`;
+      const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const endDate = new Date(parseInt(year), parseInt(month), 0);
+      
       return {
-        startDate,
-        endDate,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
         type: 'month' as const
       };
     }
-    // Caso contrário, usar último mês como padrão
+    
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -130,15 +131,12 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
           .eq('subcategory', doctorName)
           .order('date', { ascending: false });
 
-        // Aplicar filtro de período se existir
         if (periodFilter.startDate && periodFilter.endDate) {
           query = query.gte('date', periodFilter.startDate).lte('date', periodFilter.endDate);
         }
 
         const { data, error } = await query;
-
         if (error) throw error;
-
         if (data) {
           setIndependentExpenses(data as Transaction[]);
         }
@@ -152,16 +150,17 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     fetchIndependentExpenses();
   }, [doctorName, periodFilter]);
 
-  // Filtrar transfers por período - INCLUINDO DESPESAS IMPUTADAS
+  // Filtrar transfers por período - UMA ÚNICA DECLARAÇÃO
   const filteredTransfers = useMemo(() => {
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
 
-    // Aplicar filtro de período
     if (periodFilter.startDate && periodFilter.endDate) {
       filtered = filtered.filter(t => {
         const transferDate = new Date(t.date);
         const startDate = new Date(periodFilter.startDate);
         const endDate = new Date(periodFilter.endDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
         return transferDate >= startDate && transferDate <= endDate;
       });
     }
@@ -169,7 +168,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transfers, doctorName, periodFilter]);
 
-  // Filtrar despesas independentes por período
+  // Filtrar despesas independentes - UMA ÚNICA DECLARAÇÃO
   const filteredIndependentExpenses = useMemo(() => {
     if (!periodFilter.startDate || !periodFilter.endDate) return independentExpenses;
     
@@ -177,16 +176,87 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       const expenseDate = new Date(t.date);
       const startDate = new Date(periodFilter.startDate);
       const endDate = new Date(periodFilter.endDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
       return expenseDate >= startDate && expenseDate <= endDate;
     });
   }, [independentExpenses, periodFilter]);
 
-  // Entradas: todas as transações de medical_transfers (opções 1, 2, 3)
+  // Funções auxiliares
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const [year, month, day] = dateString.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const formatMonth = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const formatMonthShort = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+  };
+
+  const formatPeriod = () => {
+    const start = new Date(periodFilter.startDate);
+    const end = new Date(periodFilter.endDate);
+    
+    if (periodFilter.type === 'month') {
+      return start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+    
+    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+  };
+
+  const applyMonthFilter = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+    const endDate = new Date(parseInt(year), parseInt(monthNum), 0);
+    
+    setPeriodFilter({
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      type: 'month'
+    });
+    setShowPeriodFilter(false);
+  };
+
+  const applyCustomFilter = () => {
+    setShowPeriodFilter(false);
+  };
+
+  const clearFilter = () => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    setPeriodFilter({
+      startDate: firstDay.toISOString().split('T')[0],
+      endDate: lastDay.toISOString().split('T')[0],
+      type: 'month'
+    });
+  };
+
+  // Resto dos useMemo (entradas, despesas, etc.)
   const incomeTransfers = useMemo(() => {
     return filteredTransfers.filter(t => t.option_type !== 'expense');
   }, [filteredTransfers]);
 
-  // Despesas imputadas do sistema de expansão (campo expense_amount > 0)
   const transferExpenses = useMemo(() => {
     const expenses: Array<{
       id: string;
@@ -200,12 +270,10 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       parent_transfer_type: string;
       parent_transfer_description: string;
       source: 'medical_transfer';
-      // Novo campo para indicar que foi imputada via sistema de expansão
       imputado_sistema_expansao: boolean;
     }> = [];
 
     filteredTransfers.forEach(t => {
-      // Verifica se é uma despesa imputada do sistema de expansão
       if (t.expense_amount > 0 && t.expense_category) {
         const isImputadaSistemaExpansao = t.option_type === 'expense' || 
           (t.description && t.description.toLowerCase().includes('lançado via sistema'));
@@ -232,7 +300,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return expenses;
   }, [filteredTransfers]);
 
-  // Despesas independentes da tabela transactions
   const independentExpenseDetails = useMemo(() => {
     return filteredIndependentExpenses.map(t => ({
       id: `independent-${t.id}`,
@@ -244,29 +311,15 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       expense_category: t.subcategory || 'outros',
       source: 'transaction' as const,
       transaction_id: t.id,
-      imputado_sistema_expansao: false // Não são imputadas via sistema de expansão
+      imputado_sistema_expansao: false
     }));
   }, [filteredIndependentExpenses]);
 
-  // Todas as despesas combinadas - INCLUINDO AS IMPUTADAS
   const allExpenses = useMemo(() => {
-    const combined = [...transferExpenses, ...independentExpenseDetails]
+    return [...transferExpenses, ...independentExpenseDetails]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Agrupar por mês para análise
-    const monthlyExpenses: Record<string, typeof combined> = {};
-    combined.forEach(expense => {
-      const month = expense.reference_month;
-      if (!monthlyExpenses[month]) {
-        monthlyExpenses[month] = [];
-      }
-      monthlyExpenses[month].push(expense);
-    });
-    
-    return combined;
   }, [transferExpenses, independentExpenseDetails]);
 
-  // Despesas específicas imputadas via sistema de expansão
   const imputadasSistemaExpansao = useMemo(() => {
     return allExpenses.filter(expense => 
       expense.source === 'medical_transfer' && 
@@ -274,40 +327,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     );
   }, [allExpenses]);
 
-  // Cálculos atualizados incluindo ambas as fontes E despesas imputadas
-  const totals = useMemo(() => {
-    // Entradas: net_amount de todas as transações médicas (opções 1, 2, 3)
-    const income = incomeTransfers.reduce((acc, t) => acc + (Number(t.net_amount) || 0), 0);
-    
-    // Despesas de repasses médicos (incluindo imputadas)
-    const transferExpenseTotal = transferExpenses.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    
-    // Despesas imputadas via sistema de expansão
-    const imputadasTotal = imputadasSistemaExpansao.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    
-    // Despesas independentes
-    const independentExpenseTotal = independentExpenseDetails.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    
-    // Total geral de despesas
-    const totalExpenses = transferExpenseTotal + independentExpenseTotal;
-    
-    // Saldo líquido: entradas líquidas - todas as despesas
-    const balance = income - totalExpenses;
-    
-    return { 
-      income, 
-      transferExpenses: transferExpenseTotal,
-      imputadasExpansao: imputadasTotal,
-      independentExpenses: independentExpenseTotal,
-      totalExpenses,
-      balance,
-      grossIncome: incomeTransfers.reduce((acc, t) => acc + (Number(t.amount) || 0), 0),
-      totalDiscounts: incomeTransfers.reduce((acc, t) => 
-        acc + (Number(t.discount_amount) || 0) + (Number(t.payment_discount_amount) || 0), 0)
-    };
-  }, [incomeTransfers, transferExpenses, independentExpenseDetails, imputadasSistemaExpansao]);
-
-  // Agrupamento de entradas por tipo
   const incomesByType = useMemo(() => {
     const grouped: Record<string, { 
       transactions: MedicalTransfer[], 
@@ -339,7 +358,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       grouped[type].totalDiscounts += t.discount_amount + t.payment_discount_amount;
       grouped[type].totalTransferExpenses += t.expense_amount || 0;
       
-      // Verificar se a despesa associada foi imputada via sistema
       const isImputada = t.expense_amount > 0 && (t.option_type === 'expense' || 
         (t.description && t.description.toLowerCase().includes('lançado via sistema')));
       if (isImputada) {
@@ -354,7 +372,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return grouped;
   }, [incomeTransfers]);
 
-  // Agrupamento de TODAS as despesas por categoria - COM DESTAQUE PARA IMPUTADAS
   const expensesByCategory = useMemo(() => {
     const grouped: Record<string, { 
       transactions: typeof allExpenses, 
@@ -383,8 +400,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       
       if (t.source === 'medical_transfer') {
         grouped[category].transferCount++;
-        
-        // Verificar se foi imputada via sistema
         if ((t as any).imputado_sistema_expansao) {
           grouped[category].imputadasCount++;
         }
@@ -396,7 +411,27 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return grouped;
   }, [allExpenses]);
 
-  // Breakdown mensal atualizado com ambas as fontes E despesas imputadas
+  const totals = useMemo(() => {
+    const income = incomeTransfers.reduce((acc, t) => acc + (Number(t.net_amount) || 0), 0);
+    const transferExpenseTotal = transferExpenses.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const imputadasTotal = imputadasSistemaExpansao.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const independentExpenseTotal = independentExpenseDetails.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const totalExpenses = transferExpenseTotal + independentExpenseTotal;
+    const balance = income - totalExpenses;
+    
+    return { 
+      income, 
+      transferExpenses: transferExpenseTotal,
+      imputadasExpansao: imputadasTotal,
+      independentExpenses: independentExpenseTotal,
+      totalExpenses,
+      balance,
+      grossIncome: incomeTransfers.reduce((acc, t) => acc + (Number(t.amount) || 0), 0),
+      totalDiscounts: incomeTransfers.reduce((acc, t) => 
+        acc + (Number(t.discount_amount) || 0) + (Number(t.payment_discount_amount) || 0), 0)
+    };
+  }, [incomeTransfers, transferExpenses, independentExpenseDetails, imputadasSistemaExpansao]);
+
   const monthlyBreakdown = useMemo(() => {
     const months: Record<string, { 
       incomes: number, 
@@ -412,7 +447,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       totalDiscounts: number
     }> = {};
 
-    // Processar entradas de repasses médicos
     incomeTransfers.forEach(t => {
       const month = t.reference_month;
       if (!months[month]) {
@@ -436,12 +470,10 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       months[month].totalDiscounts += (Number(t.discount_amount) || 0) + (Number(t.payment_discount_amount) || 0);
       months[month].incomeCount++;
       
-      // Despesas associadas aos repasses
       if (t.expense_amount > 0) {
         months[month].transferExpenses += Number(t.expense_amount) || 0;
         months[month].expenseCount++;
         
-        // Verificar se foi imputada via sistema
         const isImputada = t.option_type === 'expense' || 
           (t.description && t.description.toLowerCase().includes('lançado via sistema'));
         if (isImputada) {
@@ -451,7 +483,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       }
     });
 
-    // Processar despesas independentes
     filteredIndependentExpenses.forEach(t => {
       const month = t.reference_month || t.date.substring(0, 7);
       if (!months[month]) {
@@ -474,7 +505,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       months[month].expenseCount++;
     });
 
-    // Calcular totais e saldos
     Object.keys(months).forEach(month => {
       months[month].totalExpenses = months[month].transferExpenses + months[month].independentExpenses;
       months[month].balance = months[month].incomes - months[month].totalExpenses;
@@ -485,49 +515,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       .map(([month, data]) => ({ month, ...data }));
   }, [incomeTransfers, filteredIndependentExpenses]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
- // Corrigir a função formatDate para evitar problemas de fuso horário
-const formatDate = (dateString: string) => {
-  try {
-    // Dividir a data e criar manualmente para evitar fuso horário
-    const [year, month, day] = dateString.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    return date.toLocaleDateString('pt-BR');
-  } catch (e) {
-    return dateString;
-  }
-};
-
-  const formatMonth = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  };
-
-  const formatMonthShort = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-  };
-
-  const formatPeriod = () => {
-    const start = new Date(periodFilter.startDate);
-    const end = new Date(periodFilter.endDate);
-    
-    if (periodFilter.type === 'month') {
-      return start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    }
-    
-    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
-  };
-
-  // Mapeamentos para uso dentro do componente
   const paymentMethodIcons: Record<string, React.ReactNode> = {
     cash: <DollarSign size={14} />,
     pix: <span className="text-xs">PIX</span>,
@@ -535,89 +522,6 @@ const formatDate = (dateString: string) => {
     credit_card: <CreditCard size={14} />
   };
 
-  // No DoctorDetailsModal, corrigir as funções de filtro
-
-// 1. Corrigir a função applyMonthFilter
-const applyMonthFilter = (month: string) => {
-  const [year, monthNum] = month.split('-');
-  
-  // Criar data no primeiro dia do mês
-  const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-  // Último dia do mês
-  const endDate = new Date(parseInt(year), parseInt(monthNum), 0);
-  
-  setPeriodFilter({
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0],
-    type: 'month'
-  });
-  setShowPeriodFilter(false);
-};
-
-// 2. Corrigir o filtro nas transferências
-const filteredTransfers = useMemo(() => {
-  let filtered = transfers.filter(t => t.doctor_name === doctorName);
-
-  // Aplicar filtro de período corrigido
-  if (periodFilter.startDate && periodFilter.endDate) {
-    filtered = filtered.filter(t => {
-      const transferDate = new Date(t.date);
-      const startDate = new Date(periodFilter.startDate);
-      const endDate = new Date(periodFilter.endDate);
-      
-      // Definir horários para garantir inclusão completa do dia
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
-      
-      return transferDate >= startDate && transferDate <= endDate;
-    });
-  }
-
-  return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-}, [transfers, doctorName, periodFilter]);
-
-// 3. Corrigir também para despesas independentes
-const filteredIndependentExpenses = useMemo(() => {
-  if (!periodFilter.startDate || !periodFilter.endDate) return independentExpenses;
-  
-  return independentExpenses.filter(t => {
-    const expenseDate = new Date(t.date);
-    const startDate = new Date(periodFilter.startDate);
-    const endDate = new Date(periodFilter.endDate);
-    
-    // Ajustar horários
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-    
-    return expenseDate >= startDate && expenseDate <= endDate;
-  });
-}, [independentExpenses, periodFilter]);
-
-// 4. Corrigir a inicialização do período
-const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => {
-  if (selectedMonth) {
-    const [year, month] = selectedMonth.split('-');
-    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(month), 0);
-    
-    return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-      type: 'month' as const
-    };
-  }
-  
-  // Caso contrário, usar último mês como padrão
-  const today = new Date();
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  
-  return {
-    startDate: firstDay.toISOString().split('T')[0],
-    endDate: lastDay.toISOString().split('T')[0],
-    type: 'month' as const
-  };
-});
 
  const generatePDF = () => {
   // Configurar PDF em modo paisagem (landscape)
