@@ -1,6 +1,6 @@
-import { X, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Calendar, Printer } from 'lucide-react';
 import { useCashFlow } from '../contexts/CashFlowContext';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 type MonthDetailsModalProps = {
   onClose: () => void;
@@ -11,6 +11,7 @@ type MonthDetailsModalProps = {
 
 export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, finalBalance }: MonthDetailsModalProps) {
   const { transactions } = useCashFlow();
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => t.reference_month === selectedMonth);
@@ -99,12 +100,86 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
     energia: 'Energia',
     condominio: 'Condomínio',
     funcionario: 'Funcionário',
-     contabilidade: 'Contabilidade',
-     sistema: 'Sistema',
-     impressora: 'Impressora',
-     supermercado: 'Supermercado',
-     insumo: 'Insumo'
+    contabilidade: 'Contabilidade',
+    sistema: 'Sistema',
+    impressora: 'Impressora',
+    supermercado: 'Supermercado',
+    insumo: 'Insumo'
+  };
+
+  const handlePrint = () => {
+    const printContent = modalContentRef.current;
+    if (!printContent) return;
+
+    const originalTitle = document.title;
+    document.title = `Relatório Financeiro - ${formatMonth(selectedMonth)}`;
     
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor, permita pop-ups para imprimir');
+      return;
+    }
+
+    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+    let stylesHTML = '';
+    styles.forEach((style) => {
+      if (style.tagName === 'STYLE') {
+        stylesHTML += style.outerHTML;
+      } else if (style.tagName === 'LINK') {
+        stylesHTML += style.outerHTML;
+      }
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Relatório Financeiro - ${formatMonth(selectedMonth)}</title>
+          <meta charset="UTF-8">
+          <script src="https://cdn.tailwindcss.com"></script>
+          ${stylesHTML}
+          <style>
+            @media print {
+              body {
+                padding: 20px;
+                background: white;
+              }
+              .no-print {
+                display: none !important;
+              }
+              button {
+                display: none !important;
+              }
+              .print-container {
+                margin: 0;
+                padding: 0;
+              }
+              @page {
+                size: A4;
+                margin: 2cm;
+              }
+            }
+            body {
+              font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-container">
+            ${printContent.outerHTML}
+          </div>
+          <script>
+            window.onload = () => {
+              window.print();
+              window.onafterprint = () => window.close();
+            };
+          <\/script>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    document.title = originalTitle;
   };
 
   return (
@@ -118,15 +193,24 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
               <p className="text-gray-600 capitalize">{formatMonth(selectedMonth)}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition"
-          >
-            <X size={24} />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePrint}
+              className="text-gray-400 hover:text-gray-600 transition p-2 hover:bg-gray-100 rounded-lg"
+              title="Imprimir"
+            >
+              <Printer size={24} />
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div ref={modalContentRef} className="p-6 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
