@@ -40,7 +40,6 @@ type DoctorDetailsModalProps = {
   selectedMonth?: string;
 };
 
-// Mapeamentos fora do componente para evitar referências cíclicas
 const optionTypeLabels: Record<string, string> = {
   option1: 'Procedimentos Básicos',
   option2: 'Procedimentos Especiais',
@@ -78,7 +77,6 @@ const getExpenseSourceLabel = (source: string) => {
   return source === 'medical_transfer' ? 'Associada a Repasse' : 'Despesa Independente';
 };
 
-// Interface para o filtro de período
 interface PeriodFilter {
   startDate: string;
   endDate: string;
@@ -91,7 +89,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
   const [loadingExpenses, setLoadingExpenses] = useState(true);
   const [showPeriodFilter, setShowPeriodFilter] = useState(false);
   
-  // Inicialização do periodFilter - UMA ÚNICA DECLARAÇÃO
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => {
     if (selectedMonth) {
       const [year, month] = selectedMonth.split('-');
@@ -116,7 +113,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     };
   });
 
-  // Carregar despesas independentes do médico
   useEffect(() => {
     const fetchIndependentExpenses = async () => {
       try {
@@ -150,7 +146,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     fetchIndependentExpenses();
   }, [doctorName, periodFilter]);
 
-  // Filtrar transfers por período - UMA ÚNICA DECLARAÇÃO
   const filteredTransfers = useMemo(() => {
     let filtered = transfers.filter(t => t.doctor_name === doctorName);
 
@@ -168,7 +163,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transfers, doctorName, periodFilter]);
 
-  // Filtrar despesas independentes - UMA ÚNICA DECLARAÇÃO
   const filteredIndependentExpenses = useMemo(() => {
     if (!periodFilter.startDate || !periodFilter.endDate) return independentExpenses;
     
@@ -182,77 +176,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     });
   }, [independentExpenses, periodFilter]);
 
-  // Funções auxiliares
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const [year, month, day] = dateString.split('-');
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return date.toLocaleDateString('pt-BR');
-    } catch (e) {
-      return dateString;
-    }
-  };
-
-  const formatMonth = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  };
-
-  const formatMonthShort = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
-    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-  };
-
-  const formatPeriod = () => {
-    const start = new Date(periodFilter.startDate);
-    const end = new Date(periodFilter.endDate);
-    
-    if (periodFilter.type === 'month') {
-      return start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    }
-    
-    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
-  };
-
-  const applyMonthFilter = (month: string) => {
-    const [year, monthNum] = month.split('-');
-    const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(monthNum), 0);
-    
-    setPeriodFilter({
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-      type: 'month'
-    });
-    setShowPeriodFilter(false);
-  };
-
-  const applyCustomFilter = () => {
-    setShowPeriodFilter(false);
-  };
-
-  const clearFilter = () => {
-    const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    setPeriodFilter({
-      startDate: firstDay.toISOString().split('T')[0],
-      endDate: lastDay.toISOString().split('T')[0],
-      type: 'month'
-    });
-  };
-
-  // Resto dos useMemo (entradas, despesas, etc.)
   const incomeTransfers = useMemo(() => {
     return filteredTransfers.filter(t => t.option_type !== 'expense');
   }, [filteredTransfers]);
@@ -515,6 +438,75 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
       .map(([month, data]) => ({ month, ...data }));
   }, [incomeTransfers, filteredIndependentExpenses]);
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const [year, month, day] = dateString.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const formatMonth = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const formatMonthShort = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const date = new Date(parseInt(year), parseInt(monthNum) - 1);
+    return date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+  };
+
+  const formatPeriod = () => {
+    const start = new Date(periodFilter.startDate);
+    const end = new Date(periodFilter.endDate);
+    
+    if (periodFilter.type === 'month') {
+      return start.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+    
+    return `${start.toLocaleDateString('pt-BR')} - ${end.toLocaleDateString('pt-BR')}`;
+  };
+
+  const applyMonthFilter = (month: string) => {
+    const [year, monthNum] = month.split('-');
+    const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+    const endDate = new Date(parseInt(year), parseInt(monthNum), 0);
+    
+    setPeriodFilter({
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      type: 'month'
+    });
+    setShowPeriodFilter(false);
+  };
+
+  const applyCustomFilter = () => {
+    setShowPeriodFilter(false);
+  };
+
+  const clearFilter = () => {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    setPeriodFilter({
+      startDate: firstDay.toISOString().split('T')[0],
+      endDate: lastDay.toISOString().split('T')[0],
+      type: 'month'
+    });
+  };
+
   const paymentMethodIcons: Record<string, React.ReactNode> = {
     cash: <DollarSign size={14} />,
     pix: <span className="text-xs">PIX</span>,
@@ -522,477 +514,73 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     credit_card: <CreditCard size={14} />
   };
 
+  const generatePDF = () => {
+    const doc = new jsPDF('landscape');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    let yPosition = margin;
 
- const generatePDF = () => {
-  // Configurar PDF em modo paisagem (landscape)
-  const doc = new jsPDF('landscape');
-  const pageWidth = doc.internal.pageSize.getWidth(); // 297mm em paisagem
-  const pageHeight = doc.internal.pageSize.getHeight(); // 210mm em paisagem
-  const margin = 20;
-  const lineHeight = 6;
-  let yPosition = margin;
-
-  // Função para verificar se precisa de nova página
-  const checkPageBreak = (neededSpace: number) => {
-    if (yPosition + neededSpace > pageHeight - margin) {
-      doc.addPage('landscape');
-      yPosition = margin;
-      return true;
-    }
-    return false;
-  };
-
-  // Título
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  const title = 'RELATÓRIO DE REPASSES MÉDICOS';
-  doc.text(title, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += 10;
-
-  // Médico
-  doc.setFontSize(14);
-  doc.text(`Médico: ${doctorName}`, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += 8;
-
-  // Período
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  const periodText = `Período: ${formatPeriod()}`;
-  doc.text(periodText, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += 15;
-
-  // Seção de Resumo Financeiro com destaque para despesas imputadas
-  checkPageBreak(30);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RESUMO FINANCEIRO', margin, yPosition);
-  yPosition += 8;
-
-  // Primeira coluna (esquerda)
-  const firstColumnX = margin;
-  const secondColumnX = pageWidth / 2;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  
-  // Coluna esquerda
-  doc.text(`Valor Bruto Total: ${formatCurrency(totals.grossIncome)}`, firstColumnX, yPosition);
-  yPosition += lineHeight;
-  doc.text(`Total de Descontos: -${formatCurrency(totals.totalDiscounts)}`, firstColumnX, yPosition);
-  yPosition += lineHeight;
-  doc.text(`Entradas Líquidas: ${formatCurrency(totals.income)} (${incomeTransfers.length} repasses)`, firstColumnX, yPosition);
-  yPosition += lineHeight;
-  doc.text(`Despesas de Repasses: -${formatCurrency(totals.transferExpenses)} (${transferExpenses.length})`, firstColumnX, yPosition);
-  
-  // Destaque para despesas imputadas
-  if (totals.imputadasExpansao > 0) {
-    yPosition += lineHeight;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`  → Imputadas via Sistema: -${formatCurrency(totals.imputadasExpansao)} (${imputadasSistemaExpansao.length})`, firstColumnX, yPosition);
-    doc.setFont('helvetica', 'normal');
-  }
-  
-  // Coluna direita
-  const rightColumnY = yPosition - (3 * lineHeight) - (totals.imputadasExpansao > 0 ? lineHeight : 0);
-  doc.text(`Despesas Independentes: -${formatCurrency(totals.independentExpenses)} (${independentExpenseDetails.length})`, secondColumnX, rightColumnY);
-  doc.text(`Total de Despesas: -${formatCurrency(totals.totalExpenses)} (${allExpenses.length})`, secondColumnX, rightColumnY + lineHeight);
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(`SALDO FINAL: ${formatCurrency(totals.balance)}`, secondColumnX, rightColumnY + (2 * lineHeight));
-  
-  yPosition += lineHeight * 2;
-  if (totals.imputadasExpansao > 0) yPosition += lineHeight;
-  yPosition += 15;
-
-  // Entradas por tipo com colunas mais largas (paisagem)
-  if (incomeTransfers.length > 0) {
-    checkPageBreak(25);
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('ENTRADAS POR TIPO DE PROCEDIMENTO', margin, yPosition);
-    yPosition += 10;
-    
-    // Configurar larguras das colunas para paisagem
-    const colWidths = [80, 20, 45, 45, 50, 45]; // Mais espaço em paisagem
-    const colPositions = [
-      margin,
-      margin + colWidths[0],
-      margin + colWidths[0] + colWidths[1],
-      margin + colWidths[0] + colWidths[1] + colWidths[2],
-      margin + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3],
-      margin + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4]
-    ];
-    
-    // Cabeçalho da tabela
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TIPO DE PROCEDIMENTO', colPositions[0], yPosition);
-    doc.text('QTD', colPositions[1], yPosition);
-    doc.text('VALOR BRUTO', colPositions[2], yPosition);
-    doc.text('DESCONTOS', colPositions[3], yPosition);
-    doc.text('DESP. ASSOCIADAS', colPositions[4], yPosition);
-    doc.text('VALOR LÍQUIDO', colPositions[5], yPosition);
-    
-    yPosition += 8;
-    doc.setLineWidth(0.2);
-    doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 6;
-    
-    // Conteúdo da tabela com destaque para imputadas
-    doc.setFont('helvetica', 'normal');
-    Object.entries(incomesByType).forEach(([type, data]) => {
-      checkPageBreak(10);
-      
-      // Tipo completo (mais espaço em paisagem)
-      const typeLabel = optionTypeLabels[type] || type;
-      doc.text(typeLabel, colPositions[0], yPosition);
-      
-      // Qtd
-      doc.text(data.count.toString(), colPositions[1] + 5, yPosition, { align: 'center' });
-      
-      // Bruto
-      doc.text(formatCurrency(data.totalGross), colPositions[2], yPosition);
-      
-      // Descontos
-      doc.text(formatCurrency(data.totalDiscounts), colPositions[3], yPosition);
-      
-      // Despesas Associadas (com destaque para imputadas)
-      if (data.totalImputadas > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(formatCurrency(data.totalTransferExpenses), colPositions[4], yPosition);
-        doc.setFontSize(8);
-        doc.text(`${formatCurrency(data.totalImputadas)} imputadas`, colPositions[4], yPosition + 4);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-      } else {
-        doc.text(formatCurrency(data.totalTransferExpenses), colPositions[4], yPosition);
+    const checkPageBreak = (neededSpace: number) => {
+      if (yPosition + neededSpace > pageHeight - margin) {
+        doc.addPage('landscape');
+        yPosition = margin;
+        return true;
       }
-      
-      // Líquido
-      doc.text(formatCurrency(data.netTotal), colPositions[5], yPosition);
-      
-      yPosition += 10;
-    });
-    
-    yPosition += 15;
-  }
+      return false;
+    };
 
-  // Tabela de Despesas por Categoria com destaque para imputadas
-  if (allExpenses.length > 0) {
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RELATÓRIO DE REPASSES MÉDICOS', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 10;
+
+    doc.setFontSize(14);
+    doc.text(`Médico: ${doctorName}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 8;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Período: ${formatPeriod()}`, pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+
     checkPageBreak(30);
-    
-    // Usar layout de duas colunas lado a lado para despesas
-    const leftSectionWidth = (pageWidth - (3 * margin)) / 2;
-    const rightSectionX = margin + leftSectionWidth + margin;
-    
-    // Título
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('DESPESAS POR CATEGORIA', margin, yPosition);
-    doc.text('(Despesas Imputadas via Sistema destacadas)', margin, yPosition + 5);
-    yPosition += 15;
-    
-    // Configurações de coluna para cada seção
-    const categoryColWidths = [60, 30, 40]; // Categoria, Qtd, Total
-    const detailColWidths = [100, 40]; // Descrição, Valor
-    
-    // Cabeçalho da seção de resumo
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RESUMO POR CATEGORIA', margin, yPosition);
-    yPosition += 6;
-    
-    // Linha divisória
-    doc.setLineWidth(0.1);
-    doc.line(margin, yPosition, margin + leftSectionWidth, yPosition);
-    yPosition += 6;
-    
-    // Conteúdo do resumo por categoria com destaque para imputadas
-    doc.setFont('helvetica', 'normal');
-    Object.entries(expensesByCategory).forEach(([category, data]) => {
-      checkPageBreak(8);
-      
-      const categoryY = yPosition;
-      
-      // Categoria
-      const categoryLabel = expenseCategoryLabels[category] || category;
-      doc.text(categoryLabel, margin, categoryY);
-      
-      // Quantidade com origem e destaque para imputadas
-      const qtdText = `${data.count} (${data.transferCount}R/${data.independentCount}I)`;
-      doc.text(qtdText, margin + categoryColWidths[0], categoryY);
-      
-      // Total com destaque se tiver imputadas
-      if (data.imputadasCount > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text(`${data.imputadasCount} imputadas`, margin + categoryColWidths[0] + categoryColWidths[1], categoryY + 4);
-        doc.setFontSize(10);
-      } else {
-        doc.text(formatCurrency(data.total), margin + categoryColWidths[0] + categoryColWidths[1], categoryY);
-      }
-      
-      yPosition += 8;
-    });
-    
-    // Resetar Y para detalhes à direita
-    yPosition = margin + 40 + (Object.keys(expensesByCategory).length * 8);
-    
-    // Título da seção de detalhes
-    doc.setFont('helvetica', 'bold');
-    doc.text('DETALHES DAS DESPESAS IMPUTADAS', rightSectionX, yPosition);
+    doc.text('RESUMO FINANCEIRO', margin, yPosition);
     yPosition += 8;
+
+    const firstColumnX = margin;
+    const secondColumnX = pageWidth / 2;
     
-    // Linha divisória
-    doc.line(rightSectionX, yPosition, pageWidth - margin, yPosition);
-    yPosition += 6;
-    
-    // Detalhes das despesas imputadas via sistema
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     
-    // Filtrar apenas as despesas imputadas
-    const imputadasList = imputadasSistemaExpansao.slice(0, 10); // Limitar para caber
+    doc.text(`Valor Bruto Total: ${formatCurrency(totals.grossIncome)}`, firstColumnX, yPosition);
+    yPosition += 6;
+    doc.text(`Total de Descontos: -${formatCurrency(totals.totalDiscounts)}`, firstColumnX, yPosition);
+    yPosition += 6;
+    doc.text(`Entradas Líquidas: ${formatCurrency(totals.income)} (${incomeTransfers.length} repasses)`, firstColumnX, yPosition);
+    yPosition += 6;
+    doc.text(`Despesas de Repasses: -${formatCurrency(totals.transferExpenses)} (${transferExpenses.length})`, firstColumnX, yPosition);
     
-    if (imputadasList.length > 0) {
-      imputadasList.forEach((expense, index) => {
-        if (yPosition + 8 > pageHeight - margin) {
-          doc.addPage('landscape');
-          yPosition = margin + 20;
-          doc.setFontSize(9);
-        }
-        
-        const desc = expense.description.length > 40 ? 
-          expense.description.substring(0, 40) + '...' : expense.description;
-        
-        // Destaque para despesas imputadas
-        doc.setFont('helvetica', 'bold');
-        doc.text(`🔧 ${desc}`, rightSectionX, yPosition);
-        doc.setFont('helvetica', 'normal');
-        doc.text(formatCurrency(expense.amount), rightSectionX + detailColWidths[0], yPosition);
-        
-        // Informações adicionais
-        doc.setFontSize(8);
-        doc.text(`Categoria: ${expenseCategoryLabels[expense.expense_category || ''] || expense.expense_category}`, 
-                 rightSectionX, yPosition + 4);
-        doc.text(`Data: ${formatDate(expense.date)}`, rightSectionX + 80, yPosition + 4);
-        doc.setFontSize(9);
-        
-        yPosition += 12;
-      });
-      
-      if (imputadasSistemaExpansao.length > 10) {
-        doc.text(`... e mais ${imputadasSistemaExpansao.length - 10} despesas imputadas`, rightSectionX, yPosition);
-        yPosition += 7;
-      }
-    } else {
-      doc.text('Nenhuma despesa imputada via sistema neste período', rightSectionX, yPosition);
-      yPosition += 7;
+    if (totals.imputadasExpansao > 0) {
+      yPosition += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`  → Imputadas via Sistema: -${formatCurrency(totals.imputadasExpansao)} (${imputadasSistemaExpansao.length})`, firstColumnX, yPosition);
+      doc.setFont('helvetica', 'normal');
     }
     
-    yPosition = Math.max(yPosition, margin + 40 + (Object.keys(expensesByCategory).length * 8) + 20);
-  }
-
-  // Detalhamento por Mês com destaque para despesas imputadas
-  if (monthlyBreakdown.length > 0) {
-    checkPageBreak(40);
+    const rightColumnY = yPosition - (3 * 6) - (totals.imputadasExpansao > 0 ? 6 : 0);
+    doc.text(`Despesas Independentes: -${formatCurrency(totals.independentExpenses)} (${independentExpenseDetails.length})`, secondColumnX, rightColumnY);
+    doc.text(`Total de Despesas: -${formatCurrency(totals.totalExpenses)} (${allExpenses.length})`, secondColumnX, rightColumnY + 6);
     
-    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('DETALHAMENTO POR MÊS (Despesas Imputadas destacadas)', margin, yPosition);
-    yPosition += 10;
+    doc.setFontSize(11);
+    doc.text(`SALDO FINAL: ${formatCurrency(totals.balance)}`, secondColumnX, rightColumnY + 12);
     
-    // Colunas ajustadas para paisagem
-    const monthColWidths = [40, 55, 45, 45, 50, 50]; // Mais espaço em paisagem
-    const monthColPositions = [
-      margin,
-      margin + monthColWidths[0],
-      margin + monthColWidths[0] + monthColWidths[1],
-      margin + monthColWidths[0] + monthColWidths[1] + monthColWidths[2],
-      margin + monthColWidths[0] + monthColWidths[1] + monthColWidths[2] + monthColWidths[3],
-      margin + monthColWidths[0] + monthColWidths[1] + monthColWidths[2] + monthColWidths[3] + monthColWidths[4]
-    ];
-    
-    // Cabeçalho completo
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MÊS', monthColPositions[0], yPosition);
-    doc.text('ENTRADAS LÍQUIDAS', monthColPositions[1], yPosition);
-    doc.text('DESP. REPASSES', monthColPositions[2], yPosition);
-    doc.text('DESP. INDEP.', monthColPositions[3], yPosition);
-    doc.text('TOTAL DESPESAS', monthColPositions[4], yPosition);
-    doc.text('SALDO FINAL', monthColPositions[5], yPosition);
-    
-    yPosition += 8;
-    doc.setLineWidth(0.2);
-    doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 6;
-    
-    // Conteúdo
-    doc.setFont('helvetica', 'normal');
-    monthlyBreakdown.forEach(({ month, incomes, transferExpenses, imputadasExpansao, independentExpenses, totalExpenses, balance, incomeCount, imputadasCount }) => {
-      checkPageBreak(12);
-      
-      // Mês completo
-      const monthText = formatMonthShort(month);
-      doc.text(monthText, monthColPositions[0], yPosition);
-      
-      // Entradas com contador
-      const incomeText = formatCurrency(incomes);
-      doc.text(incomeText, monthColPositions[1], yPosition);
-      doc.setFontSize(8);
-      doc.text(`${incomeCount} trans.`, monthColPositions[1], yPosition + 4);
-      doc.setFontSize(10);
-      
-      // Despesas de Repasses com destaque para imputadas
-      if (imputadasCount > 0) {
-        doc.setFont('helvetica', 'bold');
-        doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.text(`${formatCurrency(imputadasExpansao)} imputadas`, monthColPositions[2], yPosition + 4);
-        doc.setFontSize(10);
-      } else {
-        doc.text(formatCurrency(transferExpenses), monthColPositions[2], yPosition);
-      }
-      
-      // Despesas Independentes
-      doc.text(formatCurrency(independentExpenses), monthColPositions[3], yPosition);
-      
-      // Total Despesas
-      doc.text(formatCurrency(totalExpenses), monthColPositions[4], yPosition);
-      
-      // Saldo com cor condicional
-      const originalColor = doc.getTextColor();
-      if (balance >= 0) {
-        doc.setTextColor(0, 128, 0); // Verde
-      } else {
-        doc.setTextColor(255, 0, 0); // Vermelho
-      }
-      doc.text(formatCurrency(balance), monthColPositions[5], yPosition);
-      doc.setTextColor(originalColor);
-      
-      yPosition += 12;
-    });
-  }
-
-  // Gráfico de barras simples para visualização (opcional)
-  if (monthlyBreakdown.length > 0 && monthlyBreakdown.length <= 12) {
-    checkPageBreak(60);
-    
-    yPosition += 10;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('VISUALIZAÇÃO POR MÊS', margin, yPosition);
-    doc.text('(Despesas Imputadas em destaque)', margin, yPosition + 5);
-    yPosition += 15;
-    
-    // Configurações do gráfico
-    const chartWidth = pageWidth - (2 * margin);
-    const chartHeight = 50;
-    const chartX = margin;
-    const chartY = yPosition;
-    const barWidth = (chartWidth / monthlyBreakdown.length) * 0.7;
-    const maxValue = Math.max(...monthlyBreakdown.map(m => Math.max(m.incomes, m.totalExpenses)));
-    const scale = chartHeight / maxValue;
-    
-    // Desenhar eixos
-    doc.setLineWidth(0.5);
-    doc.line(chartX, chartY, chartX, chartY + chartHeight); // Eixo Y
-    doc.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight); // Eixo X
-    
-    // Desenhar barras
-    monthlyBreakdown.forEach((monthData, index) => {
-      const barX = chartX + (index * (chartWidth / monthlyBreakdown.length)) + 5;
-      
-      // Barra de entradas (verde)
-      const incomeHeight = monthData.incomes * scale;
-      doc.setFillColor(0, 128, 0);
-      doc.rect(barX, chartY + chartHeight - incomeHeight, barWidth * 0.4, incomeHeight, 'F');
-      
-      // Barra de despesas (vermelho)
-      const expenseHeight = monthData.totalExpenses * scale;
-      doc.setFillColor(255, 0, 0);
-      doc.rect(barX + barWidth * 0.4, chartY + chartHeight - expenseHeight, barWidth * 0.4, expenseHeight, 'F');
-      
-      // Barra de despesas imputadas (laranja) dentro da barra de despesas
-      if (monthData.imputadasExpansao > 0) {
-        const imputadasHeight = monthData.imputadasExpansao * scale;
-        doc.setFillColor(255, 165, 0); // Laranja
-        doc.rect(barX + barWidth * 0.4, chartY + chartHeight - imputadasHeight, barWidth * 0.4, imputadasHeight, 'F');
-      }
-      
-      // Nome do mês (abreviado)
-      const monthLabel = monthData.month.split('-')[1] + '/' + monthData.month.split('-')[0].slice(2);
-      doc.setFontSize(8);
-      doc.text(monthLabel, barX + barWidth * 0.2, chartY + chartHeight + 5);
-    });
-    
-    // Legenda
-    yPosition += chartHeight + 20;
-    doc.setFontSize(9);
-    doc.setFillColor(0, 128, 0);
-    doc.rect(margin, yPosition, 8, 8, 'F');
-    doc.text('Entradas', margin + 12, yPosition + 6);
-    
-    doc.setFillColor(255, 0, 0);
-    doc.rect(margin + 60, yPosition, 8, 8, 'F');
-    doc.text('Despesas', margin + 72, yPosition + 6);
-    
-    doc.setFillColor(255, 165, 0);
-    doc.rect(margin + 120, yPosition, 8, 8, 'F');
-    doc.text('Despesas Imputadas', margin + 132, yPosition + 6);
-  }
-
-  // Rodapé em todas as páginas
-  const pageCount = doc.getNumberOfPages();
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    const footerY = pageHeight - 10;
-    
-    // Linha divisória do rodapé
-    doc.setLineWidth(0.1);
-    doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
-    
-    // Número da página
-    doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
-    
-    // Data de geração
-    const genDate = new Date().toLocaleDateString('pt-BR');
-    const genTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    doc.text(`Gerado em: ${genDate} ${genTime}`, margin, footerY);
-    
-    // Médico
-    const doctorShort = doctorName.length > 25 ? doctorName.substring(0, 25) + '...' : doctorName;
-    doc.text(`Médico: ${doctorShort}`, pageWidth - margin - 80, footerY);
-    
-    // Período
-    const periodShort = periodFilter.type === 'month' ? 
-      formatMonthShort(periodFilter.startDate.substring(0, 7)) : 
-      'Período Personalizado';
-    doc.text(`Período: ${periodShort}`, pageWidth - margin - 80, footerY - 5);
-    
-    // Informação sobre despesas imputadas
-    if (imputadasSistemaExpansao.length > 0) {
-      doc.text(`Despesas Imputadas: ${imputadasSistemaExpansao.length}`, margin, footerY - 5);
-    }
-  }
-
-  // Salvar PDF
-  const safeDoctorName = doctorName.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-  const safeMonth = periodFilter.type === 'month' ? 
-    periodFilter.startDate.substring(0, 7).replace(/-/g, '_') : 
-    'Periodo_Personalizado';
-  const fileName = `Repasse_${safeDoctorName}_${safeMonth}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(fileName);
-};
+    doc.save(`Repasse_${doctorName.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_')}.pdf`);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -1041,7 +629,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
           </div>
         </div>
 
-        {/* Filtro de Período */}
         {showPeriodFilter && (
           <div className="border-b bg-gray-50 p-4">
             <div className="max-w-md">
@@ -1086,31 +673,30 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               </div>
               <div className="mt-4">
                 <p className="text-sm text-gray-600 mb-2">Filtros rápidos por mês:</p>
-                // No filtro rápido por mês, garantir a ordem correta
-<div className="flex flex-wrap gap-2">
-  {Array.from({ length: 6 }, (_, i) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // Mês base 1
-    
-    // Ajustar para mostrar corretamente
-    date.setDate(15); // Dia do meio para evitar problemas de borda
-    const monthStr = `${year}-${month}`;
-    
-    return (
-      <button
-        key={monthStr}
-        onClick={() => applyMonthFilter(monthStr)}
-        className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-      >
-        {date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-      </button>
-    );
-  })}
-</div>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 6 }, (_, i) => {
+                    const date = new Date();
+                    date.setMonth(date.getMonth() - i);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const monthStr = `${year}-${month}`;
+                    
+                    return (
+                      <button
+                        key={monthStr}
+                        onClick={() => applyMonthFilter(monthStr)}
+                        className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                      >
+                        {date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Tabs */}
         <div className="border-b px-6">
           <div className="flex space-x-4">
             <button
@@ -1140,7 +726,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          {/* Cards de Resumo atualizados com destaque para despesas imputadas */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
@@ -1209,10 +794,8 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
             </div>
           </div>
 
-          {/* Conteúdo das Tabs */}
           {activeTab === 'summary' && (
             <div className="space-y-6">
-              {/* Breakdown por Mês com destaque para despesas imputadas */}
               <div>
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <Calendar className="text-blue-600" size={20} />
@@ -1280,9 +863,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                 )}
               </div>
 
-              {/* Resumo por Tipo atualizado com destaque para despesas imputadas */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Entradas por Tipo */}
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 mb-4">Entradas por Tipo</h3>
                   {Object.keys(incomesByType).length > 0 ? (
@@ -1339,7 +920,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                   )}
                 </div>
 
-                {/* Despesas por Categoria com destaque para imputadas */}
                 <div>
                   <h3 className="text-lg font-bold text-gray-800 mb-4">Despesas por Categoria</h3>
                   {Object.keys(expensesByCategory).length > 0 ? (
@@ -1422,7 +1002,6 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                 </div>
               </div>
 
-              {/* Seção específica para despesas imputadas via sistema */}
               {imputadasSistemaExpansao.length > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
                   <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -1572,36 +1151,32 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                               </div>
                               {t.expense_amount > 0 && (
                                 <>
-                                  <div className={`flex justify-between mb-1 ${
-                                    temDespesaImputada ? 'text-yellow-700 font-medium' : 'text-red-600'
-                                  }`}>
-                                    <span>
-                                                                   
-                                <div className="flex justify-between mb-1">
-                                  <span className="text-gray-600">Despesa Associada:</span>
-                                  <span className="text-red-600 font-bold">
-                                    -{formatCurrency(t.expense_amount)}
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600 mb-1">Categoria da Despesa:</p>
-                                  <p className="font-medium text-red-600">
-                                    {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
-                                  </p>
-                                </div>
-                              </>
-                            )}
-                            <div className="flex justify-between pt-2 border-t">
-                              <span className="font-semibold text-gray-700">Valor Final:</span>
-                              <span className="font-bold text-green-600">
-                                {formatCurrency(t.net_amount - (t.expense_amount || 0))}
-                              </span>
+                                  <div className="flex justify-between mb-1">
+                                    <span className="text-gray-600">Despesa Associada:</span>
+                                    <span className="text-red-600 font-bold">
+                                      -{formatCurrency(t.expense_amount)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-600 mb-1">Categoria da Despesa:</p>
+                                    <p className="font-medium text-red-600">
+                                      {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
+                                    </p>
+                                  </div>
+                                </>
+                              )}
+                              <div className="flex justify-between pt-2 border-t">
+                                <span className="font-semibold text-gray-700">Valor Final:</span>
+                                <span className="font-bold text-green-600">
+                                  {formatCurrency(t.net_amount - (t.expense_amount || 0))}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
@@ -1613,198 +1188,189 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
             </div>
           )}
 
-                {activeTab === 'expenses' && (
-        <div>
-          <div className="flex justify-between items-center mb-4">
+          {activeTab === 'expenses' && (
             <div>
-              <h3 className="text-lg font-bold text-gray-800">Detalhamento de Despesas</h3>
-              <div className="flex gap-4 mt-1 text-sm text-gray-500">
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-blue-500 rounded"></span>
-                  Associadas a Repasses: {transferExpenses.length}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-yellow-500 rounded"></span>
-                  Imputadas via Sistema: {imputadasSistemaExpansao.length}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-purple-500 rounded"></span>
-                  Independentes: {independentExpenseDetails.length}
-                </span>
-              </div>
-            </div>
-            <span className="text-sm text-gray-500">Total: {allExpenses.length} transação(ões)</span>
-          </div>
-          
-          {loadingExpenses ? (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-500">Carregando despesas...</p>
-            </div>
-          ) : allExpenses.length > 0 ? (
-            <div className="space-y-4">
-              {/* Filtros para despesas */}
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => {
-                    // Mostrar todas
-                    // Esta lógica precisaria ser implementada com estado adicional
-                  }}
-                  className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-lg"
-                >
-                  Todas ({allExpenses.length})
-                </button>
-                <button
-                  onClick={() => {
-                    // Filtrar apenas imputadas
-                    // Esta lógica precisaria ser implementada com estado adicional
-                  }}
-                  className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded-lg"
-                >
-                  Imputadas ({imputadasSistemaExpansao.length})
-                </button>
-                <button
-                  onClick={() => {
-                    // Filtrar apenas independentes
-                    // Esta lógica precisaria ser implementada com estado adicional
-                  }}
-                  className="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg"
-                >
-                  Independentes ({independentExpenseDetails.length})
-                </button>
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Detalhamento de Despesas</h3>
+                  <div className="flex gap-4 mt-1 text-sm text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-blue-500 rounded"></span>
+                      Associadas a Repasses: {transferExpenses.length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-yellow-500 rounded"></span>
+                      Imputadas via Sistema: {imputadasSistemaExpansao.length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 bg-purple-500 rounded"></span>
+                      Independentes: {independentExpenseDetails.length}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-sm text-gray-500">Total: {allExpenses.length} transação(ões)</span>
               </div>
               
-              {allExpenses.map((t) => {
-                const isImputada = (t as any).imputado_sistema_expansao === true;
-                return (
-                  <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
-                    isImputada ? 'border-yellow-300 bg-yellow-50' :
-                    t.source === 'medical_transfer' ? 'border-blue-200' : 'border-purple-200'
-                  }`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-red-600">
-                            {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
-                          </span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            isImputada ? 'bg-yellow-100 text-yellow-800' :
-                            t.source === 'medical_transfer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {isImputada ? '🔧 Imputada via Sistema' : getExpenseSourceLabel(t.source)}
-                          </span>
-                          {isImputada && (
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                              Mês ref: {formatMonthShort(t.reference_month)}
-                            </span>
-                          )}
+              {loadingExpenses ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Carregando despesas...</p>
+                </div>
+              ) : allExpenses.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      onClick={() => {}}
+                      className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-lg"
+                    >
+                      Todas ({allExpenses.length})
+                    </button>
+                    <button
+                      onClick={() => {}}
+                      className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded-lg"
+                    >
+                      Imputadas ({imputadasSistemaExpansao.length})
+                    </button>
+                    <button
+                      onClick={() => {}}
+                      className="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg"
+                    >
+                      Independentes ({independentExpenseDetails.length})
+                    </button>
+                  </div>
+                  
+                  {allExpenses.map((t) => {
+                    const isImputada = (t as any).imputado_sistema_expansao === true;
+                    return (
+                      <div key={t.id} className={`bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow ${
+                        isImputada ? 'border-yellow-300 bg-yellow-50' :
+                        t.source === 'medical_transfer' ? 'border-blue-200' : 'border-purple-200'
+                      }`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-red-600">
+                                {expenseCategoryLabels[t.expense_category || ''] || t.expense_category}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                isImputada ? 'bg-yellow-100 text-yellow-800' :
+                                t.source === 'medical_transfer' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                              }`}>
+                                {isImputada ? '🔧 Imputada via Sistema' : getExpenseSourceLabel(t.source)}
+                              </span>
+                              {isImputada && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                  Mês ref: {formatMonthShort(t.reference_month)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-800">{t.description}</p>
+                            <div className="text-sm text-gray-500">
+                              <p>{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
+                              {t.source === 'medical_transfer' && !isImputada && (
+                                <p className="text-blue-600 mt-1">
+                                  Repasse original: {(t as any).parent_transfer_description}
+                                </p>
+                              )}
+                              {isImputada && (
+                                <p className="text-yellow-600 mt-1">
+                                  Despesa lançada via sistema de expansão
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-red-600">{formatCurrency(t.amount)}</p>
+                            <p className="text-sm text-gray-500">Valor da Despesa</p>
+                            {isImputada && (
+                              <p className="text-xs text-yellow-600 font-medium mt-1">
+                                Lançada via sistema
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-gray-800">{t.description}</p>
-                        <div className="text-sm text-gray-500">
-                          <p>{formatDate(t.date)} • Ref: {formatMonthShort(t.reference_month)}</p>
-                          {t.source === 'medical_transfer' && !isImputada && (
-                            <p className="text-blue-600 mt-1">
-                              Repasse original: {(t as any).parent_transfer_description}
-                            </p>
-                          )}
-                          {isImputada && (
-                            <p className="text-yellow-600 mt-1">
-                              Despesa lançada via sistema de expansão
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-red-600">{formatCurrency(t.amount)}</p>
-                        <p className="text-sm text-gray-500">Valor da Despesa</p>
+                        
                         {isImputada && (
-                          <p className="text-xs text-yellow-600 font-medium mt-1">
-                            Lançada via sistema
-                          </p>
+                          <div className="bg-white rounded-lg p-3 text-sm border border-yellow-200 mt-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Database size={16} className="text-yellow-600" />
+                              <span className="font-medium text-yellow-700">Informações da Despesa Imputada</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-gray-600">Data do Lançamento:</p>
+                                <p className="font-medium">{formatDate(t.date)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Mês de Referência:</p>
+                                <p className="font-medium">{formatMonth(t.reference_month)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Categoria:</p>
+                                <p className="font-medium">{expenseCategoryLabels[t.expense_category || ''] || t.expense_category}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Origem:</p>
+                                <p className="font-medium text-yellow-600">Sistema de Expansão</p>
+                              </div>
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                    
-                    {/* Informações adicionais para despesas imputadas */}
-                    {isImputada && (
-                      <div className="bg-white rounded-lg p-3 text-sm border border-yellow-200 mt-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Database size={16} className="text-yellow-600" />
-                          <span className="font-medium text-yellow-700">Informações da Despesa Imputada</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-gray-600">Data do Lançamento:</p>
-                            <p className="font-medium">{formatDate(t.date)}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Mês de Referência:</p>
-                            <p className="font-medium">{formatMonth(t.reference_month)}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Categoria:</p>
-                            <p className="font-medium">{expenseCategoryLabels[t.expense_category || ''] || t.expense_category}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Origem:</p>
-                            <p className="font-medium text-yellow-600">Sistema de Expansão</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+                  <TrendingDown className="mx-auto text-gray-400 mb-4" size={48} />
+                  <p className="text-gray-500 text-lg mb-2">Nenhuma despesa registrada</p>
+                  <p className="text-gray-400">
+                    As despesas podem ser adicionadas através de repasses médicos ou transações independentes
+                  </p>
+                  <div className="mt-4 text-sm text-gray-500">
+                    <p>Para adicionar despesas imputadas via sistema:</p>
+                    <p className="text-xs">1. Vá para a lista de repasses</p>
+                    <p className="text-xs">2. Clique em "Ver mais" no médico desejado</p>
+                    <p className="text-xs">3. Use o sistema de expansão para lançar despesas</p>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-              <TrendingDown className="mx-auto text-gray-400 mb-4" size={48} />
-              <p className="text-gray-500 text-lg mb-2">Nenhuma despesa registrada</p>
-              <p className="text-gray-400">
-                As despesas podem ser adicionadas através de repasses médicos ou transações independentes
-              </p>
-              <div className="mt-4 text-sm text-gray-500">
-                <p>Para adicionar despesas imputadas via sistema:</p>
-                <p className="text-xs">1. Vá para a lista de repasses</p>
-                <p className="text-xs">2. Clique em "Ver mais" no médico desejado</p>
-                <p className="text-xs">3. Use o sistema de expansão para lançar despesas</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-
-    <div className="border-t p-4 bg-gray-50">
-      <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-500">
-          <div className="flex items-center gap-4">
-            <span>Repasses: {incomeTransfers.length}</span>
-            <span className="flex items-center gap-1">
-              <Database size={14} />
-              Despesas: {allExpenses.length} 
-              ({transferExpenses.length}R/{independentExpenseDetails.length}I)
-              {imputadasSistemaExpansao.length > 0 && (
-                <span className="text-yellow-600 ml-1">
-                  • {imputadasSistemaExpansao.length} imputadas
-                </span>
+                </div>
               )}
-            </span>
-            <span>Período: {formatPeriod()}</span>
-          </div>
-          {imputadasSistemaExpansao.length > 0 && (
-            <div className="mt-2 text-xs text-yellow-700 bg-yellow-100 px-3 py-1 rounded inline-block">
-              🔧 {imputadasSistemaExpansao.length} despesas foram imputadas via sistema de expansão
             </div>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
-        >
-          Fechar
-        </button>
+
+        <div className="border-t p-4 bg-gray-50">
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-500">
+              <div className="flex items-center gap-4">
+                <span>Repasses: {incomeTransfers.length}</span>
+                <span className="flex items-center gap-1">
+                  <Database size={14} />
+                  Despesas: {allExpenses.length} 
+                  ({transferExpenses.length}R/{independentExpenseDetails.length}I)
+                  {imputadasSistemaExpansao.length > 0 && (
+                    <span className="text-yellow-600 ml-1">
+                      • {imputadasSistemaExpansao.length} imputadas
+                    </span>
+                  )}
+                </span>
+                <span>Período: {formatPeriod()}</span>
+              </div>
+              {imputadasSistemaExpansao.length > 0 && (
+                <div className="mt-2 text-xs text-yellow-700 bg-yellow-100 px-3 py-1 rounded inline-block">
+                  🔧 {imputadasSistemaExpansao.length} despesas foram imputadas via sistema de expansão
+                </div>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
+  );
+}
