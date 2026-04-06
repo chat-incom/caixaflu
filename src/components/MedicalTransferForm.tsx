@@ -7,7 +7,7 @@ interface MedicalTransferFormProps {
 }
 
 const PROCEDURE_TYPES = [
-  { value: 'Consulta', label: 'Consulta', percentage: 16.33 },
+  { value: 'Consulta', label: 'Consulta', percentage: 20 },
   { value: 'Infiltrações', label: 'Infiltrações', percentage: 40 },
   { value: 'Onda de Choque', label: 'Onda de Choque', percentage: 30 },
   { value: 'Cirurgia Particular', label: 'Cirurgia Particular', percentage: 2 },
