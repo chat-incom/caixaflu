@@ -6,36 +6,18 @@ interface MedicalTransferFormProps {
   onTransferAdded: () => void;
 }
 
-const OPTION1_CATEGORIES = [
-  'Consulta',
-  'Onda de choque',
-  'Retirada de pontos',
-  'Medicação',
-  'Coleta de sangue',
-  'Outros'
+const PROCEDURE_TYPES = [
+  { value: 'Consulta', label: 'Consulta', percentage: 16.33 },
+  { value: 'Infiltrações', label: 'Infiltrações', percentage: 40 },
+  { value: 'Onda de Choque', label: 'Onda de Choque', percentage: 30 },
+  { value: 'Cirurgia Particular', label: 'Cirurgia Particular', percentage: 2 },
+  { value: 'Médico Parceiro', label: 'Médico Parceiro', percentage: 50 }
 ];
 
-const OPTION2_CATEGORIES = [
-  'Infiltração',
-  'Viscossuplementação',
-  'Cirurgia',
-  'Outros'
+const PAYMENT_TYPES = [
+  { value: 'À vista', label: 'À vista' },
+  { value: 'Parcelado', label: 'Parcelado' }
 ];
-
-const OPTION3_CATEGORIES = [
-  'UDI',
-  'HSD',
-  'Natus Lumine',
-  'Dom Hospital',
-  'Centro Médico',
-  'Outros'
-];
-
-const DISCOUNT_OPTION1 = 16.33;
-const DISCOUNT_OPTION2 = 10.93;
-const DISCOUNT_OPTION3 = 10.93;
-const DISCOUNT_DEBIT = 1.7;
-const DISCOUNT_CREDIT = 2.5;
 
 const EXPENSE_CATEGORIES = [
   { value: 'rateio_mensal', label: 'Rateio Mensal' },
@@ -46,10 +28,9 @@ const EXPENSE_CATEGORIES = [
 
 export default function MedicalTransferForm({ onTransferAdded }: MedicalTransferFormProps) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [optionType, setOptionType] = useState<'option1' | 'option2' | 'option3'>('option1');
-  const [category, setCategory] = useState('');
+  const [procedureType, setProcedureType] = useState('Consulta');
   const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
+  const [entryAmount, setEntryAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [doctorName, setDoctorName] = useState('');
   const [referenceMonth, setReferenceMonth] = useState(() => {
@@ -58,9 +39,11 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
   });
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
   const [newDoctorName, setNewDoctorName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'debit_card' | 'credit_card' | 'pix'>('pix');
+  const [paymentType, setPaymentType] = useState('À vista');
+  const [installments, setInstallments] = useState('1');
   const [expenseCategory, setExpenseCategory] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
+  const [observations, setObservations] = useState('');
 
   useEffect(() => {
     fetchDoctors();
@@ -71,14 +54,6 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: transactionsData } = await supabase
-        .from('transactions')
-        .select('subcategory')
-        .eq('user_id', user.id)
-        .eq('type', 'expense')
-        .eq('category', 'repasse_medico')
-        .not('subcategory', 'is', null);
-
       const { data: transfersData } = await supabase
         .from('medical_transfers')
         .select('doctor_name')
@@ -86,12 +61,6 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
         .not('doctor_name', 'is', null);
 
       const doctors = new Set<string>();
-
-      transactionsData?.forEach(t => {
-        if (t.subcategory && t.subcategory.trim()) {
-          doctors.add(t.subcategory.trim());
-        }
-      });
 
       transfersData?.forEach(t => {
         if (t.doctor_name && t.doctor_name.trim()) {
@@ -105,61 +74,14 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     }
   };
 
-  const getCurrentCategories = () => {
-    switch (optionType) {
-      case 'option1':
-        return OPTION1_CATEGORIES;
-      case 'option2':
-        return OPTION2_CATEGORIES;
-      case 'option3':
-        return OPTION3_CATEGORIES;
-      default:
-        return [];
-    }
+  const getProcedurePercentage = () => {
+    const procedure = PROCEDURE_TYPES.find(p => p.value === procedureType);
+    return procedure ? procedure.percentage : 0;
   };
 
-  const getCurrentDiscount = () => {
-    switch (optionType) {
-      case 'option1':
-        return DISCOUNT_OPTION1;
-      case 'option2':
-        return DISCOUNT_OPTION2;
-      case 'option3':
-        return DISCOUNT_OPTION3;
-      default:
-        return 0;
-    }
-  };
-
-  const getPaymentDiscount = () => {
-    switch (paymentMethod) {
-      case 'debit_card':
-        return DISCOUNT_DEBIT;
-      case 'credit_card':
-        return DISCOUNT_CREDIT;
-      default:
-        return 0;
-    }
-  };
-
-  const calculateValues = (amountValue: number) => {
-    const discountPercentage = getCurrentDiscount();
-    const discountAmount = (amountValue * discountPercentage) / 100;
-
-    const paymentDiscountPercentage = getPaymentDiscount();
-    const paymentDiscountAmount = (amountValue * paymentDiscountPercentage) / 100;
-
-    const totalDiscountAmount = discountAmount + paymentDiscountAmount;
-    const netAmount = amountValue - totalDiscountAmount;
-
-    return {
-      discountPercentage,
-      discountAmount,
-      paymentDiscountPercentage,
-      paymentDiscountAmount,
-      totalDiscountAmount,
-      netAmount
-    };
+  const calculateRepasse = (amount: number) => {
+    const percentage = getProcedurePercentage();
+    return (amount * percentage) / 100;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,7 +89,7 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
 
     const finalDoctorName = doctorName === 'new' ? newDoctorName : doctorName;
 
-    if (!category || !amount || !finalDoctorName || !referenceMonth) {
+    if (!procedureType || !entryAmount || !finalDoctorName || !referenceMonth) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
@@ -178,15 +100,9 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado');
 
-      const amountValue = parseFloat(amount);
+      const entryAmountValue = parseFloat(entryAmount);
       const expenseAmountValue = expenseAmount ? parseFloat(expenseAmount) : 0;
-      const {
-        discountPercentage,
-        discountAmount,
-        paymentDiscountPercentage,
-        paymentDiscountAmount,
-        netAmount
-      } = calculateValues(amountValue);
+      const installmentsValue = parseInt(installments);
 
       const { error } = await supabase
         .from('medical_transfers')
@@ -194,33 +110,31 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
           {
             user_id: user.id,
             date,
-            option_type: optionType,
-            category,
-            description,
-            amount: amountValue,
-            discount_percentage: discountPercentage,
-            discount_amount: discountAmount,
-            net_amount: netAmount,
             doctor_name: finalDoctorName,
             reference_month: referenceMonth,
-            payment_method: paymentMethod,
-            payment_discount_percentage: paymentDiscountPercentage,
-            payment_discount_amount: paymentDiscountAmount,
+            procedure_type: procedureType,
+            description: description || null,
+            entry_amount: entryAmountValue,
+            payment_type: paymentType,
+            installments: installmentsValue,
             expense_category: expenseCategory || null,
-            expense_amount: expenseAmountValue
+            expense_amount: expenseAmountValue,
+            observations: observations || null
           }
         ]);
 
       if (error) throw error;
 
-      setCategory('');
+      setProcedureType('Consulta');
       setDescription('');
-      setAmount('');
+      setEntryAmount('');
       setDoctorName('');
       setNewDoctorName('');
-      setPaymentMethod('pix');
+      setPaymentType('À vista');
+      setInstallments('1');
       setExpenseCategory('');
       setExpenseAmount('');
+      setObservations('');
       fetchDoctors();
       onTransferAdded();
     } catch (error) {
@@ -232,44 +146,24 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
   };
 
   const previewCalculation = () => {
-    const amountValue = parseFloat(amount);
-    if (isNaN(amountValue) || amountValue <= 0) return null;
+    const amount = parseFloat(entryAmount);
+    if (isNaN(amount) || amount <= 0) return null;
 
-    const {
-      discountPercentage,
-      discountAmount,
-      paymentDiscountPercentage,
-      paymentDiscountAmount,
-      totalDiscountAmount,
-      netAmount
-    } = calculateValues(amountValue);
-
+    const percentage = getProcedurePercentage();
+    const repasseAmount = calculateRepasse(amount);
     const expenseAmountValue = expenseAmount ? parseFloat(expenseAmount) : 0;
-    const finalAmount = netAmount - expenseAmountValue;
+    const finalAmount = repasseAmount - expenseAmountValue;
 
     return {
-      discountPercentage,
-      discountAmount,
-      paymentDiscountPercentage,
-      paymentDiscountAmount,
-      totalDiscountAmount,
-      netAmount,
+      entryAmount: amount,
+      percentage,
+      repasseAmount,
       expenseAmountValue,
       finalAmount
     };
   };
 
   const preview = previewCalculation();
-
-  const getPaymentMethodLabel = (method: string) => {
-    const labels: Record<string, string> = {
-      cash: 'Dinheiro',
-      debit_card: 'Débito',
-      credit_card: 'Crédito',
-      pix: 'PIX'
-    };
-    return labels[method] || method;
-  };
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -304,26 +198,6 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo de Opção *
-          </label>
-          <select
-            value={optionType}
-            onChange={(e) => {
-              setOptionType(e.target.value as 'option1' | 'option2' | 'option3');
-              setCategory('');
-            }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="option1">Opção 1 - Procedimentos (Desconto: 16,33%)</option>
-            <option value="option2">Opção 2 - Procedimentos Especiais (Desconto: 10,93%)</option>
-            <option value="option3">Opção 3 - Hospital (Desconto: 10,93%)</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
             Médico *
           </label>
           <select
@@ -346,58 +220,40 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
             <option value="new">+ Adicionar novo médico</option>
           </select>
         </div>
-
-        {doctorName === 'new' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nome do Novo Médico *
-            </label>
-            <input
-              type="text"
-              value={newDoctorName}
-              onChange={(e) => setNewDoctorName(e.target.value)}
-              placeholder="Digite o nome do médico"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      {doctorName === 'new' && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nome do Novo Médico *
+          </label>
+          <input
+            type="text"
+            value={newDoctorName}
+            onChange={(e) => setNewDoctorName(e.target.value)}
+            placeholder="Digite o nome do médico"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Categoria *
+            Tipo de Procedimento *
           </label>
           <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            value={procedureType}
+            onChange={(e) => setProcedureType(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           >
-            <option value="">Selecione uma categoria</option>
-            {getCurrentCategories().map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
+            {PROCEDURE_TYPES.map((proc) => (
+              <option key={proc.value} value={proc.value}>
+                {proc.label} ({proc.percentage}%)
               </option>
             ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Método de Entrada *
-          </label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'debit_card' | 'credit_card' | 'pix')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          >
-            <option value="pix">PIX</option>
-            <option value="cash">Dinheiro</option>
-            <option value="debit_card">Débito (Desconto adicional: 1,7%)</option>
-            <option value="credit_card">Crédito (Desconto adicional: 2,5%)</option>
           </select>
         </div>
 
@@ -408,12 +264,60 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
           <input
             type="number"
             step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            value={entryAmount}
+            onChange={(e) => setEntryAmount(e.target.value)}
             placeholder="0.00"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
+        </div>
+      </div>
+
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+        <h4 className="font-semibold text-gray-800 mb-3 text-sm">Método de Entrada (Informativo)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo de Pagamento *
+            </label>
+            <select
+              value={paymentType}
+              onChange={(e) => {
+                setPaymentType(e.target.value);
+                if (e.target.value === 'À vista') {
+                  setInstallments('1');
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              {PAYMENT_TYPES.map((pt) => (
+                <option key={pt.value} value={pt.value}>
+                  {pt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {paymentType === 'Parcelado' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Quantidade de Parcelas *
+              </label>
+              <select
+                value={installments}
+                onChange={(e) => setInstallments(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
+                  <option key={num} value={num}>
+                    {num}x
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -468,22 +372,33 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
         />
       </div>
 
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Observações
+        </label>
+        <textarea
+          value={observations}
+          onChange={(e) => setObservations(e.target.value)}
+          placeholder="Observações adicionais (opcional)..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={2}
+        />
+      </div>
+
       {preview && (
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
           <h4 className="font-semibold text-blue-900 mb-2">Pré-visualização do Cálculo:</h4>
           <div className="space-y-1 text-sm text-blue-800">
-            <p>Valor de Entrada: <span className="font-semibold">R$ {parseFloat(amount).toFixed(2)}</span></p>
-            <p>Desconto Nota Fiscal ({preview.discountPercentage}%): <span className="font-semibold text-red-600">- R$ {preview.discountAmount.toFixed(2)}</span></p>
-            {preview.paymentDiscountPercentage > 0 && (
-              <p>Desconto {getPaymentMethodLabel(paymentMethod)} ({preview.paymentDiscountPercentage}%): <span className="font-semibold text-red-600">- R$ {preview.paymentDiscountAmount.toFixed(2)}</span></p>
-            )}
-            <p className="font-medium">Total de Descontos: <span className="font-semibold text-red-600">- R$ {preview.totalDiscountAmount.toFixed(2)}</span></p>
-            <p className="pt-2 border-t border-blue-300">Valor de Repasse Bruto: <span className="font-semibold text-green-600">R$ {preview.netAmount.toFixed(2)}</span></p>
+            <p>Valor de Entrada: <span className="font-semibold">R$ {preview.entryAmount.toFixed(2)}</span></p>
+            <p>Porcentagem do Repasse ({preview.percentage}%): <span className="font-semibold text-green-600">R$ {preview.repasseAmount.toFixed(2)}</span></p>
             {preview.expenseAmountValue > 0 && (
               <>
                 <p>Saída ({EXPENSE_CATEGORIES.find(c => c.value === expenseCategory)?.label}): <span className="font-semibold text-orange-600">- R$ {preview.expenseAmountValue.toFixed(2)}</span></p>
-                <p className="pt-2 border-t border-blue-300 font-bold">Valor de Repasse Líquido: <span className="font-semibold text-green-700">R$ {preview.finalAmount.toFixed(2)}</span></p>
+                <p className="pt-2 border-t border-blue-300 font-bold">Valor Líquido ao Médico: <span className="font-semibold text-green-700">R$ {preview.finalAmount.toFixed(2)}</span></p>
               </>
+            )}
+            {preview.expenseAmountValue === 0 && (
+              <p className="pt-2 border-t border-blue-300 font-bold">Valor ao Médico: <span className="font-semibold text-green-700">R$ {preview.repasseAmount.toFixed(2)}</span></p>
             )}
           </div>
         </div>
