@@ -46,6 +46,12 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
 
   const calculateRepasse = (entryAmount: number, procedureType: string) => {
     const percentage = getProcedurePercentage(procedureType);
+    const discount = (entryAmount * percentage) / 100;
+    return entryAmount - discount;
+  };
+
+  const calculateIncom = (entryAmount: number, procedureType: string) => {
+    const percentage = getProcedurePercentage(procedureType);
     return (entryAmount * percentage) / 100;
   };
 
@@ -61,18 +67,22 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
 
   const totals = useMemo(() => {
     const totalEntry = filteredTransfers.reduce((sum, t) => sum + t.entry_amount, 0);
+    const totalIncom = filteredTransfers.reduce((sum, t) => {
+      return sum + calculateIncom(t.entry_amount, t.procedure_type);
+    }, 0);
     const totalRepasse = filteredTransfers.reduce((sum, t) => {
       return sum + calculateRepasse(t.entry_amount, t.procedure_type);
     }, 0);
     const totalExpense = filteredTransfers.reduce((sum, t) => sum + (t.expense_amount || 0), 0);
     const totalLiquid = totalRepasse - totalExpense;
 
-    return { totalEntry, totalRepasse, totalExpense, totalLiquid };
+    return { totalEntry, totalIncom, totalRepasse, totalExpense, totalLiquid };
   }, [filteredTransfers]);
 
   const monthlyBreakdown = useMemo(() => {
     const months: Record<string, {
       entry: number;
+      incom: number;
       repasse: number;
       expense: number;
       liquid: number;
@@ -82,13 +92,15 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
     filteredTransfers.forEach(t => {
       const month = t.reference_month;
       if (!months[month]) {
-        months[month] = { entry: 0, repasse: 0, expense: 0, liquid: 0, count: 0 };
+        months[month] = { entry: 0, incom: 0, repasse: 0, expense: 0, liquid: 0, count: 0 };
       }
 
+      const incomAmount = calculateIncom(t.entry_amount, t.procedure_type);
       const repasseAmount = calculateRepasse(t.entry_amount, t.procedure_type);
       const expenseAmount = t.expense_amount || 0;
 
       months[month].entry += t.entry_amount;
+      months[month].incom += incomAmount;
       months[month].repasse += repasseAmount;
       months[month].expense += expenseAmount;
       months[month].liquid += (repasseAmount - expenseAmount);
@@ -153,7 +165,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-blue-700">Total Entradas</span>
@@ -163,12 +175,20 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
               <p className="text-xs text-blue-600 mt-1">{filteredTransfers.length} lançamentos</p>
             </div>
 
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-purple-700">INCOM</span>
+              </div>
+              <p className="text-2xl font-bold text-purple-600">{formatCurrency(totals.totalIncom)}</p>
+              <p className="text-xs text-purple-600 mt-1">Desconto aplicado</p>
+            </div>
+
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-green-700">Repasse Bruto</span>
               </div>
               <p className="text-2xl font-bold text-green-600">{formatCurrency(totals.totalRepasse)}</p>
-              <p className="text-xs text-green-600 mt-1">Após porcentagens</p>
+              <p className="text-xs text-green-600 mt-1">Após INCOM</p>
             </div>
 
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
@@ -200,6 +220,7 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                     <tr>
                       <th className="py-3 px-4 text-left text-sm font-semibold text-gray-700">Mês</th>
                       <th className="py-3 px-4 text-right text-sm font-semibold text-gray-700">Entradas</th>
+                      <th className="py-3 px-4 text-right text-sm font-semibold text-gray-700">INCOM</th>
                       <th className="py-3 px-4 text-right text-sm font-semibold text-gray-700">Repasse</th>
                       <th className="py-3 px-4 text-right text-sm font-semibold text-gray-700">Saídas</th>
                       <th className="py-3 px-4 text-right text-sm font-semibold text-gray-700">Líquido</th>
@@ -207,13 +228,16 @@ export function DoctorDetailsModal({ onClose, doctorName, transfers, selectedMon
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {monthlyBreakdown.map(({ month, entry, repasse, expense, liquid, count }) => (
+                    {monthlyBreakdown.map(({ month, entry, incom, repasse, expense, liquid, count }) => (
                       <tr key={month} className="hover:bg-gray-50">
                         <td className="py-3 px-4">
                           <span className="font-medium">{formatMonthShort(month)}</span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <span className="text-blue-600 font-medium">{formatCurrency(entry)}</span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-purple-600 font-medium">{formatCurrency(incom)}</span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <span className="text-green-600 font-medium">{formatCurrency(repasse)}</span>

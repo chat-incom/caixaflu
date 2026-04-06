@@ -104,6 +104,12 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
 
   const calculateRepasse = (entryAmount: number, procedureType: string) => {
     const percentage = getProcedurePercentage(procedureType);
+    const discount = (entryAmount * percentage) / 100;
+    return entryAmount - discount;
+  };
+
+  const calculateIncom = (entryAmount: number, procedureType: string) => {
+    const percentage = getProcedurePercentage(procedureType);
     return (entryAmount * percentage) / 100;
   };
 
@@ -203,6 +209,9 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
   const hasMoreTransfers = filteredTransfers.length > initialDisplayCount;
 
   const totalEntry = filteredTransfers.reduce((sum, t) => sum + t.entry_amount, 0);
+  const totalIncom = filteredTransfers.reduce((sum, t) => {
+    return sum + calculateIncom(t.entry_amount, t.procedure_type);
+  }, 0);
   const totalRepasse = filteredTransfers.reduce((sum, t) => {
     return sum + calculateRepasse(t.entry_amount, t.procedure_type);
   }, 0);
@@ -270,10 +279,14 @@ export default function MedicalTransfersList({ refreshTrigger }: MedicalTransfer
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <p className="text-sm text-blue-600 font-medium">Total de Entradas</p>
             <p className="text-2xl font-bold text-blue-700">R$ {totalEntry.toFixed(2)}</p>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <p className="text-sm text-purple-600 font-medium">INCOM</p>
+            <p className="text-2xl font-bold text-purple-700">R$ {totalIncom.toFixed(2)}</p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
             <p className="text-sm text-green-600 font-medium">Repasse Bruto</p>

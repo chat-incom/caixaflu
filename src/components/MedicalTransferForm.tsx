@@ -81,6 +81,12 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
 
   const calculateRepasse = (amount: number) => {
     const percentage = getProcedurePercentage();
+    const discount = (amount * percentage) / 100;
+    return amount - discount;
+  };
+
+  const calculateIncom = (amount: number) => {
+    const percentage = getProcedurePercentage();
     return (amount * percentage) / 100;
   };
 
@@ -150,6 +156,7 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     if (isNaN(amount) || amount <= 0) return null;
 
     const percentage = getProcedurePercentage();
+    const incomAmount = calculateIncom(amount);
     const repasseAmount = calculateRepasse(amount);
     const expenseAmountValue = expenseAmount ? parseFloat(expenseAmount) : 0;
     const finalAmount = repasseAmount - expenseAmountValue;
@@ -157,6 +164,7 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
     return {
       entryAmount: amount,
       percentage,
+      incomAmount,
       repasseAmount,
       expenseAmountValue,
       finalAmount
@@ -390,15 +398,13 @@ export default function MedicalTransferForm({ onTransferAdded }: MedicalTransfer
           <h4 className="font-semibold text-blue-900 mb-2">Pré-visualização do Cálculo:</h4>
           <div className="space-y-1 text-sm text-blue-800">
             <p>Valor de Entrada: <span className="font-semibold">R$ {preview.entryAmount.toFixed(2)}</span></p>
-            <p>Porcentagem do Repasse ({preview.percentage}%): <span className="font-semibold text-green-600">R$ {preview.repasseAmount.toFixed(2)}</span></p>
+            <p>INCOM ({preview.percentage}%): <span className="font-semibold text-purple-600">- R$ {preview.incomAmount.toFixed(2)}</span></p>
+            <p className="font-medium">Repasse ao Médico: <span className="font-semibold text-green-600">R$ {preview.repasseAmount.toFixed(2)}</span></p>
             {preview.expenseAmountValue > 0 && (
               <>
                 <p>Saída ({EXPENSE_CATEGORIES.find(c => c.value === expenseCategory)?.label}): <span className="font-semibold text-orange-600">- R$ {preview.expenseAmountValue.toFixed(2)}</span></p>
                 <p className="pt-2 border-t border-blue-300 font-bold">Valor Líquido ao Médico: <span className="font-semibold text-green-700">R$ {preview.finalAmount.toFixed(2)}</span></p>
               </>
-            )}
-            {preview.expenseAmountValue === 0 && (
-              <p className="pt-2 border-t border-blue-300 font-bold">Valor ao Médico: <span className="font-semibold text-green-700">R$ {preview.repasseAmount.toFixed(2)}</span></p>
             )}
           </div>
         </div>
