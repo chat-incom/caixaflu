@@ -22,13 +22,23 @@ export function CashFlowProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      refreshData();
-    } else {
-      setInitialBalanceState(null);
-      setTransactions([]);
-      setLoading(false);
-    }
+    let isMounted = true;
+
+    const loadData = async () => {
+      if (user && isMounted) {
+        await refreshData();
+      } else if (isMounted) {
+        setInitialBalanceState(null);
+        setTransactions([]);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const refreshData = async () => {
@@ -75,19 +85,15 @@ export function CashFlowProvider({ children }: { children: ReactNode }) {
           .eq('id', initialBalance.id);
 
         if (error) throw error;
-
-        setInitialBalanceState({ ...initialBalance, amount });
       } else {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('initial_balances')
-          .insert([{ user_id: user.id, amount }])
-          .select()
-          .single();
+          .insert([{ user_id: user.id, amount }]);
 
         if (error) throw error;
-        setInitialBalanceState(data);
       }
 
+      await refreshData();
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -98,15 +104,13 @@ export function CashFlowProvider({ children }: { children: ReactNode }) {
     if (!user) return { error: new Error('User not authenticated') };
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('transactions')
-        .insert([{ ...transaction, user_id: user.id }])
-        .select()
-        .single();
+        .insert([{ ...transaction, user_id: user.id }]);
 
       if (error) throw error;
 
-      setTransactions([data, ...transactions]);
+      await refreshData();
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -122,7 +126,7 @@ export function CashFlowProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      setTransactions(transactions.map(t => t.id === id ? { ...t, ...updates } : t));
+      await refreshData();
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -138,7 +142,7 @@ export function CashFlowProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      setTransactions(transactions.filter(t => t.id !== id));
+      await refreshData();
       return { error: null };
     } catch (error) {
       return { error: error as Error };
