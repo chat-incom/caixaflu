@@ -32,18 +32,18 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
   }, [incomeTransactions, expenseTransactions]);
 
   const expensesByCategory = useMemo(() => {
-    const fixed = expenseTransactions.filter(t => t.category === 'fixed');
-    const variable = expenseTransactions.filter(t => t.category === 'variable');
-    return {
-      fixed: {
-        transactions: fixed,
-        total: fixed.reduce((acc, t) => acc + t.amount, 0)
-      },
-      variable: {
-        transactions: variable,
-        total: variable.reduce((acc, t) => acc + t.amount, 0)
+    const grouped: Record<string, { transactions: any[], total: number }> = {};
+
+    expenseTransactions.forEach(t => {
+      const cat = t.category || 'outros';
+      if (!grouped[cat]) {
+        grouped[cat] = { transactions: [], total: 0 };
       }
-    };
+      grouped[cat].transactions.push(t);
+      grouped[cat].total += t.amount;
+    });
+
+    return grouped;
   }, [expenseTransactions]);
 
   const incomesByPaymentMethod = useMemo(() => {
@@ -93,6 +93,28 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
     credit_card: 'Cartão de Crédito',
     deposito: 'Depósito',
     outros: 'Outros'
+  };
+
+  const categoryLabels: Record<string, string> = {
+    fixed: 'Despesas Fixas',
+    variable: 'Despesas Variáveis',
+    repasse_medico: 'Repasse Médico',
+    imposto: 'Impostos',
+    adiantamento: 'Adiantamentos',
+    fatura: 'Faturas',
+    investimentos: 'Investimentos',
+    outros: 'Outros'
+  };
+
+  const categoryColors: Record<string, { bg: string, border: string, text: string }> = {
+    fixed: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600' },
+    variable: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600' },
+    repasse_medico: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600' },
+    imposto: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600' },
+    adiantamento: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600' },
+    fatura: { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-600' },
+    investimentos: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-600' },
+    outros: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-600' }
   };
 
   const subcategoryLabels: Record<string, string> = {
@@ -302,85 +324,65 @@ export function MonthDetailsModal({ onClose, selectedMonth, initialBalance, fina
               </h3>
 
               <div className="space-y-4">
-                {expensesByCategory.fixed.transactions.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-semibold text-red-800">Despesas Fixas</h4>
-                      <span className="text-lg font-bold text-red-600">
-                        {formatCurrency(expensesByCategory.fixed.total)}
-                      </span>
-                    </div>
+                {Object.keys(expensesByCategory).length > 0 ? (
+                  Object.entries(expensesByCategory).map(([category, data]) => {
+                    const colors = categoryColors[category] || categoryColors.outros;
+                    const isFixed = category === 'fixed';
 
-                    {Object.keys(fixedSubcategoryTotals).length > 0 && (
-                      <div className="mb-3 bg-white rounded p-2">
-                        <p className="text-xs font-medium text-gray-600 mb-2">Por tipo:</p>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          {Object.entries(fixedSubcategoryTotals).map(([sub, total]) => (
-                            <div key={sub} className="flex justify-between">
-                              <span className="text-gray-700">{subcategoryLabels[sub]}:</span>
-                              <span className="font-semibold text-red-600">{formatCurrency(total)}</span>
+                    return (
+                      <div key={category} className={`${colors.bg} border ${colors.border} rounded-lg p-4`}>
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 className={`font-semibold ${colors.text.replace('text-', 'text-')}`}>
+                            {categoryLabels[category] || category}
+                          </h4>
+                          <span className={`text-lg font-bold ${colors.text}`}>
+                            {formatCurrency(data.total)}
+                          </span>
+                        </div>
+
+                        {isFixed && Object.keys(fixedSubcategoryTotals).length > 0 && (
+                          <div className="mb-3 bg-white rounded p-2">
+                            <p className="text-xs font-medium text-gray-600 mb-2">Por tipo:</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {Object.entries(fixedSubcategoryTotals).map(([sub, total]) => (
+                                <div key={sub} className="flex justify-between">
+                                  <span className="text-gray-700">{subcategoryLabels[sub]}:</span>
+                                  <span className={`font-semibold ${colors.text}`}>{formatCurrency(total)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          {data.transactions.map((t: any) => (
+                            <div key={t.id} className="bg-white rounded p-2 text-sm">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-800">{t.description}</p>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span>{formatDate(t.date)}</span>
+                                    {t.fixed_subcategory && (
+                                      <>
+                                        <span>•</span>
+                                        <span className={`${colors.text} font-medium`}>
+                                          {subcategoryLabels[t.fixed_subcategory]}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className={`font-semibold ${colors.text} ml-2`}>
+                                  {formatCurrency(t.amount)}
+                                </span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       </div>
-                    )}
-
-                    <div className="space-y-2">
-                      {expensesByCategory.fixed.transactions.map((t: any) => (
-                        <div key={t.id} className="bg-white rounded p-2 text-sm">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-800">{t.description}</p>
-                              <div className="flex items-center gap-2 text-xs text-gray-500">
-                                <span>{formatDate(t.date)}</span>
-                                {t.fixed_subcategory && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="text-red-600 font-medium">
-                                      {subcategoryLabels[t.fixed_subcategory]}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <span className="font-semibold text-red-600 ml-2">
-                              {formatCurrency(t.amount)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {expensesByCategory.variable.transactions.length > 0 && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-semibold text-orange-800">Despesas Variáveis</h4>
-                      <span className="text-lg font-bold text-orange-600">
-                        {formatCurrency(expensesByCategory.variable.total)}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {expensesByCategory.variable.transactions.map((t: any) => (
-                        <div key={t.id} className="bg-white rounded p-2 text-sm">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-800">{t.description}</p>
-                              <p className="text-xs text-gray-500">{formatDate(t.date)}</p>
-                            </div>
-                            <span className="font-semibold text-orange-600 ml-2">
-                              {formatCurrency(t.amount)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {expensesByCategory.fixed.transactions.length === 0 &&
-                 expensesByCategory.variable.transactions.length === 0 && (
+                    );
+                  })
+                ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
                     <p className="text-gray-500">Nenhuma saída neste mês</p>
                   </div>
