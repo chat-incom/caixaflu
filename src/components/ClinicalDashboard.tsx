@@ -1,7 +1,20 @@
 // src/components/ClinicalDashboard.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, User, Search, Download, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { 
+  Calendar, 
+  User, 
+  TrendingUp, 
+  TrendingDown, 
+  DollarSign, 
+  Pill, 
+  Package,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 
 interface ClinicalMovement {
   id: string;
@@ -19,8 +32,13 @@ interface ClinicalMovement {
   medication_cost: number;
   supplies_cost: number;
   other_costs: number;
+  other_costs_description: string;
   total_deductions: number;
   net_clinic_value: number;
+  cash_settlement_type: string;
+  has_medication: boolean;
+  has_other_costs: boolean;
+  observations: string;
 }
 
 interface MonthlySummary {
@@ -36,9 +54,13 @@ interface DoctorSummary {
   doctorName: string;
   totalGross: number;
   totalDoctorAmount: number;
+  totalDeductions: number;
   totalNetClinic: number;
   procedureCount: number;
   procedures: { [key: string]: number };
+  hasMedication: boolean;
+  hasOtherCosts: boolean;
+  cashTransactions: number;
 }
 
 export default function ClinicalDashboard() {
@@ -50,6 +72,7 @@ export default function ClinicalDashboard() {
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'monthly' | 'doctor'>('monthly');
   const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     fetchMovements();
@@ -93,12 +116,14 @@ export default function ClinicalDashboard() {
   };
 
   const formatMonth = (monthString: string) => {
+    if (!monthString) return '-';
     const [year, month] = monthString.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, 15);
     return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '-';
     return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
   };
 
@@ -109,29 +134,33 @@ export default function ClinicalDashboard() {
     return matchMonth && matchDoctor;
   });
 
+  // Calcular deduções totais corretamente
+  const calculateTotalDeductions = (movement: ClinicalMovement) => {
+    return (movement.payment_tax_amount || 0) + 
+           (movement.invoice_tax_amount || 0) + 
+           (movement.medication_cost || 0) + 
+           (movement.supplies_cost || 0) + 
+           (movement.other_costs || 0);
+  };
+
   // Resumo mensal
   const monthlySummaries: MonthlySummary[] = (selectedDoctor === 'all' ? availableMonths : [selectedMonth])
     .filter(month => month !== 'all')
     .map(month => {
       const monthMovements = movements.filter(m => m.reference_month === month);
-      if (selectedDoctor !== 'all') {
-        const filtered = monthMovements.filter(m => m.doctor_name === selectedDoctor);
-        return {
-          month,
-          totalGross: filtered.reduce((sum, m) => sum + m.gross_value, 0),
-          totalDoctorAmount: filtered.reduce((sum, m) => sum + m.doctor_amount, 0),
-          totalDeductions: filtered.reduce((sum, m) => sum + m.total_deductions, 0),
-          totalNetClinic: filtered.reduce((sum, m) => sum + m.net_clinic_value, 0),
-          procedureCount: filtered.length
-        };
-      }
+      const filtered = selectedDoctor !== 'all' 
+        ? monthMovements.filter(m => m.doctor_name === selectedDoctor)
+        : monthMovements;
+      
+      const totalDeductions = filtered.reduce((sum, m) => sum + calculateTotalDeductions(m), 0);
+      
       return {
         month,
-        totalGross: monthMovements.reduce((sum, m) => sum + m.gross_value, 0),
-        totalDoctorAmount: monthMovements.reduce((sum, m) => sum + m.doctor_amount, 0),
-        totalDeductions: monthMovements.reduce((sum, m) => sum + m.total_deductions, 0),
-        totalNetClinic: monthMovements.reduce((sum, m) => sum + m.net_clinic_value, 0),
-        procedureCount: monthMovements.length
+        totalGross: filtered.reduce((sum, m) => sum + m.gross_value, 0),
+        totalDoctorAmount: filtered.reduce((sum, m) => sum + m.doctor_amount, 0),
+        totalDeductions: totalDeductions,
+        totalNetClinic: filtered.reduce((sum, m) => sum + m.net_clinic_value, 0),
+        procedureCount: filtered.length
       };
     });
 
@@ -145,17 +174,30 @@ export default function ClinicalDashboard() {
         : doctorMovements;
       
       const procedures: { [key: string]: number } = {};
+      let hasMedication = false;
+      let hasOtherCosts = false;
+      let cashTransactions = 0;
+      
       filtered.forEach(m => {
         procedures[m.procedure_type] = (procedures[m.procedure_type] || 0) + 1;
+        if (m.has_medication || m.medication_cost > 0) hasMedication = true;
+        if (m.has_other_costs || m.other_costs > 0) hasOtherCosts = true;
+        if (m.payment_method === 'cash') cashTransactions++;
       });
+      
+      const totalDeductions = filtered.reduce((sum, m) => sum + calculateTotalDeductions(m), 0);
 
       return {
         doctorName: doctor,
         totalGross: filtered.reduce((sum, m) => sum + m.gross_value, 0),
         totalDoctorAmount: filtered.reduce((sum, m) => sum + m.doctor_amount, 0),
+        totalDeductions: totalDeductions,
         totalNetClinic: filtered.reduce((sum, m) => sum + m.net_clinic_value, 0),
         procedureCount: filtered.length,
-        procedures
+        procedures,
+        hasMedication,
+        hasOtherCosts,
+        cashTransactions
       };
     });
 
@@ -163,12 +205,16 @@ export default function ClinicalDashboard() {
   const totals = {
     totalGross: filteredMovements.reduce((sum, m) => sum + m.gross_value, 0),
     totalDoctorAmount: filteredMovements.reduce((sum, m) => sum + m.doctor_amount, 0),
-    totalDeductions: filteredMovements.reduce((sum, m) => sum + m.total_deductions, 0),
+    totalDeductions: filteredMovements.reduce((sum, m) => sum + calculateTotalDeductions(m), 0),
     totalNetClinic: filteredMovements.reduce((sum, m) => sum + m.net_clinic_value, 0),
     totalCount: filteredMovements.length
   };
 
   const effectiveMargin = totals.totalGross > 0 ? (totals.totalNetClinic / totals.totalGross) * 100 : 0;
+
+  const toggleDoctorDetails = (doctorName: string) => {
+    setExpandedDoctor(expandedDoctor === doctorName ? null : doctorName);
+  };
 
   if (loading) {
     return (
@@ -228,7 +274,10 @@ export default function ClinicalDashboard() {
             </label>
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setExpandedDoctor(null);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Todos os meses</option>
@@ -247,7 +296,10 @@ export default function ClinicalDashboard() {
             </label>
             <select
               value={selectedDoctor}
-              onChange={(e) => setSelectedDoctor(e.target.value)}
+              onChange={(e) => {
+                setSelectedDoctor(e.target.value);
+                setExpandedDoctor(null);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Todos os médicos</option>
@@ -352,7 +404,7 @@ export default function ClinicalDashboard() {
                     {formatCurrency(monthlySummaries.reduce((sum, m) => sum + m.totalNetClinic, 0))}
                   </td>
                   <td className="py-3 px-4"></td>
-                 </tr>
+                </tr>
               </tfoot>
             </table>
           </div>
@@ -373,14 +425,31 @@ export default function ClinicalDashboard() {
               <div key={doctor.doctorName} className="bg-white rounded-lg shadow-md overflow-hidden">
                 <div 
                   className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white cursor-pointer hover:bg-gray-50 transition"
-                  onClick={() => setExpandedDoctor(isExpanded ? null : doctor.doctorName)}
+                  onClick={() => toggleDoctorDetails(doctor.doctorName)}
                 >
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                        <User size={20} className="text-blue-600" />
-                        {doctor.doctorName}
-                      </h3>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                          <User size={20} className="text-blue-600" />
+                          {doctor.doctorName}
+                        </h3>
+                        {doctor.hasMedication && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full flex items-center gap-1">
+                            <Pill size={12} /> Medicação
+                          </span>
+                        )}
+                        {doctor.hasOtherCosts && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full flex items-center gap-1">
+                            <Package size={12} /> Outros custos
+                          </span>
+                        )}
+                        {doctor.cashTransactions > 0 && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                            💵 {doctor.cashTransactions} pagamento(s) em dinheiro
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-500 mt-1">
                         {doctor.procedureCount} procedimentos • {Object.keys(doctor.procedures).length} tipos
                       </p>
@@ -389,6 +458,9 @@ export default function ClinicalDashboard() {
                       <p className="text-sm text-gray-600">Total Líquido para Clínica</p>
                       <p className="text-xl font-bold text-green-600">{formatCurrency(doctor.totalNetClinic)}</p>
                       <p className="text-xs text-gray-500">Margem: {margin.toFixed(1)}%</p>
+                    </div>
+                    <div className="ml-4">
+                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </div>
                   </div>
                 </div>
@@ -408,6 +480,9 @@ export default function ClinicalDashboard() {
                       <div className="bg-orange-50 rounded-lg p-3">
                         <p className="text-xs text-orange-600">Deduções</p>
                         <p className="text-lg font-bold text-orange-700">{formatCurrency(doctor.totalDeductions)}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Taxas + Impostos + Custos
+                        </p>
                       </div>
                       <div className="bg-green-50 rounded-lg p-3">
                         <p className="text-xs text-green-600">Líquido Clínica</p>
@@ -439,21 +514,73 @@ export default function ClinicalDashboard() {
                               <th className="text-left py-2 px-3">Paciente</th>
                               <th className="text-right py-2 px-3">Valor</th>
                               <th className="text-right py-2 px-3">Repasse</th>
+                              <th className="text-center py-2 px-3">💊 Medicação</th>
+                              <th className="text-center py-2 px-3">📋 Outros Custos</th>
                               <th className="text-right py-2 px-3 text-green-600">Líquido</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {doctorMovements.map((movement) => (
-                              <tr key={movement.id} className="border-b border-gray-100">
-                                <td className="py-2 px-3 text-gray-600">{formatDate(movement.date)}</td>
-                                <td className="py-2 px-3 font-medium">{movement.procedure_type}</td>
-                                <td className="py-2 px-3 text-gray-600">{movement.patient_name || '-'}</td>
-                                <td className="py-2 px-3 text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
-                                <td className="py-2 px-3 text-red-600 text-right">-{formatCurrency(movement.doctor_amount)}</td>
-                                <td className="py-2 px-3 text-green-600 font-bold text-right">{formatCurrency(movement.net_clinic_value)}</td>
-                               </tr>
-                            ))}
+                            {doctorMovements.map((movement) => {
+                              const hasMedication = movement.medication_cost > 0;
+                              const hasOtherCosts = movement.other_costs > 0;
+                              return (
+                                <tr key={movement.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                  <td className="py-2 px-3 text-gray-600">{formatDate(movement.date)}</td>
+                                  <td className="py-2 px-3 font-medium">{movement.procedure_type}</td>
+                                  <td className="py-2 px-3 text-gray-600">{movement.patient_name || '-'}</td>
+                                  <td className="py-2 px-3 text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
+                                  <td className="py-2 px-3 text-red-600 text-right">
+                                    {movement.cash_settlement_type === 'doctor_took' ? (
+                                      <span className="text-green-600 text-xs">(levou no dia)</span>
+                                    ) : (
+                                      `-${formatCurrency(movement.doctor_amount)}`
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    {hasMedication ? (
+                                      <span className="text-blue-600" title={`R$ ${movement.medication_cost.toFixed(2)}`}>
+                                        ✅ R$ {movement.medication_cost.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      '-'
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    {hasOtherCosts ? (
+                                      <span className="text-orange-600" title={movement.other_costs_description || 'Outros custos'}>
+                                        ✅ R$ {movement.other_costs.toFixed(2)}
+                                      </span>
+                                    ) : (
+                                      '-'
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-green-600 font-bold text-right">
+                                    {formatCurrency(movement.net_clinic_value)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
+                          <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                            <tr>
+                              <td colSpan={3} className="py-2 px-3 text-right font-bold">Totais:</td>
+                              <td className="py-2 px-3 text-right font-bold text-blue-600">
+                                {formatCurrency(doctor.totalGross)}
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-red-600">
+                                -{formatCurrency(doctor.totalDoctorAmount)}
+                              </td>
+                              <td className="py-2 px-3 text-center font-bold text-blue-600">
+                                {doctor.hasMedication ? '✓' : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-center font-bold text-orange-600">
+                                {doctor.hasOtherCosts ? '✓' : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-bold text-green-600">
+                                {formatCurrency(doctor.totalNetClinic)}
+                              </td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
@@ -465,11 +592,14 @@ export default function ClinicalDashboard() {
         </div>
       )}
 
-      {/* Lista de lançamentos detalhada */}
-      {filteredMovements.length > 0 && (
+      {/* Tabela de todos os lançamentos */}
+      {filteredMovements.length > 0 && viewMode === 'monthly' && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-800">Todos os Lançamentos</h3>
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <FileText size={18} />
+              Todos os Lançamentos
+            </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -483,8 +613,10 @@ export default function ClinicalDashboard() {
                   <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">Valor</th>
                   <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">% Médico</th>
                   <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">Repasse</th>
+                  <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">💊</th>
+                  <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">📋</th>
                   <th className="text-right py-3 px-3 text-sm font-semibold text-green-600">Líquido</th>
-                 </tr>
+                </tr>
               </thead>
               <tbody>
                 {filteredMovements.map((movement) => (
@@ -496,9 +628,31 @@ export default function ClinicalDashboard() {
                     <td className="py-3 px-3 text-sm text-gray-600">{movement.patient_name || '-'}</td>
                     <td className="py-3 px-3 text-sm text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
                     <td className="py-3 px-3 text-sm text-gray-600 text-right">{movement.doctor_percentage}%</td>
-                    <td className="py-3 px-3 text-sm text-red-600 text-right">-{formatCurrency(movement.doctor_amount)}</td>
-                    <td className="py-3 px-3 text-sm text-green-600 font-bold text-right">{formatCurrency(movement.net_clinic_value)}</td>
-                   </tr>
+                    <td className="py-3 px-3 text-sm text-red-600 text-right">
+                      {movement.cash_settlement_type === 'doctor_took' ? (
+                        <span className="text-green-600 text-xs">(levou no dia)</span>
+                      ) : (
+                        `-${formatCurrency(movement.doctor_amount)}`
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {movement.medication_cost > 0 ? (
+                        <span className="text-blue-600 text-xs" title={`R$ ${movement.medication_cost}`}>
+                          ✅
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {movement.other_costs > 0 ? (
+                        <span className="text-orange-600 text-xs" title={movement.other_costs_description || 'Outros custos'}>
+                          ✅
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="py-3 px-3 text-sm text-green-600 font-bold text-right">
+                      {formatCurrency(movement.net_clinic_value)}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
