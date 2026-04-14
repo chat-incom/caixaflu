@@ -1,4 +1,3 @@
-// ClinicalResultsDashboard.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
@@ -55,6 +54,13 @@ export default function ClinicalResultsDashboard() {
     setSummary({ ...totals, effectiveMargin });
   };
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div className="bg-white rounded-lg shadow p-6">
@@ -62,7 +68,7 @@ export default function ClinicalResultsDashboard() {
           <p className="text-gray-600">Faturamento Bruto</p>
           <DollarSign className="text-blue-500" size={20} />
         </div>
-        <p className="text-2xl font-bold">R$ {summary.totalGross.toFixed(2)}</p>
+        <p className="text-2xl font-bold">{formatCurrency(summary.totalGross)}</p>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
@@ -70,7 +76,7 @@ export default function ClinicalResultsDashboard() {
           <p className="text-gray-600">Repasses Médicos</p>
           <TrendingDown className="text-red-500" size={20} />
         </div>
-        <p className="text-2xl font-bold text-red-600">-R$ {summary.totalDoctorRepasses.toFixed(2)}</p>
+        <p className="text-2xl font-bold text-red-600">-{formatCurrency(summary.totalDoctorRepasses)}</p>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
@@ -79,12 +85,12 @@ export default function ClinicalResultsDashboard() {
           <TrendingDown className="text-orange-500" size={20} />
         </div>
         <p className="text-2xl font-bold text-orange-600">
-          -R$ {(summary.totalPaymentTaxes + summary.totalInvoiceTaxes + summary.totalDirectCosts).toFixed(2)}
+          -{formatCurrency(summary.totalPaymentTaxes + summary.totalInvoiceTaxes + summary.totalDirectCosts)}
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          Taxas: R$ {summary.totalPaymentTaxes.toFixed(2)} | 
-          Impostos: R$ {summary.totalInvoiceTaxes.toFixed(2)} | 
-          Custos: R$ {summary.totalDirectCosts.toFixed(2)}
+          Taxas: {formatCurrency(summary.totalPaymentTaxes)} | 
+          Impostos: {formatCurrency(summary.totalInvoiceTaxes)} | 
+          Custos: {formatCurrency(summary.totalDirectCosts)}
         </p>
       </div>
 
@@ -93,7 +99,7 @@ export default function ClinicalResultsDashboard() {
           <p className="text-gray-600">Resultado Líquido Clínica</p>
           <TrendingUp className="text-green-500" size={20} />
         </div>
-        <p className="text-2xl font-bold text-green-600">R$ {summary.totalNetClinic.toFixed(2)}</p>
+        <p className="text-2xl font-bold text-green-600">{formatCurrency(summary.totalNetClinic)}</p>
         <p className="text-sm text-gray-500">Margem: {summary.effectiveMargin.toFixed(1)}%</p>
       </div>
     </div>
