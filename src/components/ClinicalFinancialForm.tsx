@@ -43,7 +43,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
 
     return calculateClinicalFinance(
       grossValueNum,
-      procedure.clinicPercentage,
+      procedure.doctorPercentage,
       formData.paymentMethod,
       formData.paymentTaxRate,
       formData.invoiceTaxRate,
@@ -63,7 +63,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      // Inserir movimento financeiro
+      // Inserir movimento financeiro - USANDO OS CAMPOS CORRETOS DO SEU SCHEMA
       const { error: movementError } = await supabase
         .from('clinical_financial_movements')
         .insert({
@@ -74,9 +74,9 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           procedure_type: formData.procedureType,
           reference_month: formData.date.substring(0, 7),
           gross_value: preview.grossValue,
-          clinic_percentage: preview.clinicPercentage,
-          clinic_amount: preview.clinicAmount,
+          doctor_percentage: preview.doctorPercentage,
           doctor_amount: preview.doctorAmount,
+          clinic_share_before_costs: preview.clinicShareBeforeCosts,
           payment_method: formData.paymentMethod,
           payment_tax_rate: preview.paymentTaxRate,
           payment_tax_amount: preview.paymentTaxAmount,
@@ -92,7 +92,10 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           observations: formData.observations || null
         });
 
-      if (movementError) throw movementError;
+      if (movementError) {
+        console.error('Erro detalhado:', movementError);
+        throw movementError;
+      }
 
       // Criar transações no sistema financeiro
       // 1. Receita bruta total
@@ -114,7 +117,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           user_id: user.id,
           type: 'expense',
           amount: preview.doctorAmount,
-          description: `👨‍⚕️ Repasse médico - Dr. ${formData.doctorName} (${preview.clinicPercentage}% clínica)`,
+          description: `👨‍⚕️ Repasse médico - Dr. ${formData.doctorName} (${preview.doctorPercentage}% médico)`,
           payment_method: formData.paymentMethod,
           category: 'repasse_medico',
           date: formData.date,
@@ -152,7 +155,13 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         });
       }
 
-      alert(`✅ Movimento registrado com sucesso!\n\n💰 Valor líquido para clínica: ${formatCurrency(preview.netClinicValue)}`);
+      const clinicPercentage = 100 - preview.doctorPercentage;
+      alert(`✅ Movimento registrado com sucesso!\n\n` +
+        `💰 Valor bruto: ${formatCurrency(preview.grossValue)}\n` +
+        `🏥 Clínica (${clinicPercentage}%): ${formatCurrency(preview.clinicShareBeforeCosts)}\n` +
+        `📉 Deduções: -${formatCurrency(preview.totalDeductions)}\n` +
+        `✨ Líquido clínica: ${formatCurrency(preview.netClinicValue)}`);
+      
       onSuccess();
       
       // Reset form
@@ -174,8 +183,8 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       });
       
     } catch (error) {
-      console.error('Erro:', error);
-      alert('❌ Erro ao registrar movimento');
+      console.error('Erro detalhado:', error);
+      alert('❌ Erro ao registrar movimento. Verifique o console para mais detalhes.');
     } finally {
       setLoading(false);
     }
@@ -189,6 +198,8 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
   };
 
   const preview = calculatePreview();
+  const procedure = PROCEDURE_TYPES.find(p => p.value === formData.procedureType);
+  const clinicPercentage = procedure ? 100 - procedure.doctorPercentage : 0;
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
@@ -197,7 +208,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           Registro Financeiro Clínica
         </h2>
         <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-          Percentuais são da CLÍNICA
+          Clínica fica com {clinicPercentage}%
         </div>
       </div>
 
@@ -255,7 +266,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           >
             {PROCEDURE_TYPES.map(p => (
               <option key={p.value} value={p.value}>
-                {p.label} - {p.clinicPercentage}% para clínica / {100 - p.clinicPercentage}% para médico
+                {p.label} - {p.doctorPercentage}% médico / {100 - p.doctorPercentage}% clínica
               </option>
             ))}
           </select>
@@ -322,61 +333,80 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
             placeholder="Ex: 5%"
           />
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Custo com Medicação
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            value={formData.medicationCost}
-            onChange={(e) => handleInputChange('medicationCost', e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            placeholder="0,00"
-          />
-        </div>
+      {/* Custos Diretos */}
+      <div className="bg-gray-50 rounded-lg p-4 mb-6">
+        <h3 className="font-semibold text-gray-800 mb-3">Custos Diretos (Opcional)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Custo com Medicação
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.medicationCost}
+              onChange={(e) => handleInputChange('medicationCost', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+              placeholder="0,00"
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Custo com Insumos
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            value={formData.suppliesCost}
-            onChange={(e) => handleInputChange('suppliesCost', e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            placeholder="0,00"
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Custo com Insumos
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.suppliesCost}
+              onChange={(e) => handleInputChange('suppliesCost', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+              placeholder="0,00"
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Outros Custos
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            value={formData.otherCosts}
-            onChange={(e) => handleInputChange('otherCosts', e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            placeholder="0,00"
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Outros Custos
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.otherCosts}
+              onChange={(e) => handleInputChange('otherCosts', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+              placeholder="0,00"
+            />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Descrição Outros Custos
-          </label>
-          <input
-            type="text"
-            value={formData.otherCostsDescription}
-            onChange={(e) => handleInputChange('otherCostsDescription', e.target.value)}
-            className="w-full px-3 py-2 border rounded-md"
-            placeholder="Ex: Material de consumo"
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descrição Outros Custos
+            </label>
+            <input
+              type="text"
+              value={formData.otherCostsDescription}
+              onChange={(e) => handleInputChange('otherCostsDescription', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+              placeholder="Ex: Material de consumo"
+            />
+          </div>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Observações
+        </label>
+        <textarea
+          value={formData.observations}
+          onChange={(e) => handleInputChange('observations', e.target.value)}
+          rows={2}
+          className="w-full px-3 py-2 border rounded-md"
+          placeholder="Observações adicionais..."
+        />
       </div>
 
       {/* Preview do Cálculo */}
@@ -400,12 +430,12 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                 <p className="text-sm text-gray-600 mb-2">Distribuição:</p>
                 <div className="space-y-1 ml-4">
                   <p className="text-sm">
-                    <span className="font-semibold text-green-700">Clínica ({preview.clinicPercentage}%):</span>{' '}
-                    {formatCurrency(preview.clinicAmount)}
+                    <span className="font-semibold text-blue-700">Médico ({preview.doctorPercentage}%):</span>{' '}
+                    {formatCurrency(preview.doctorAmount)}
                   </p>
                   <p className="text-sm">
-                    <span className="font-semibold text-blue-700">Médico ({100 - preview.clinicPercentage}%):</span>{' '}
-                    {formatCurrency(preview.doctorAmount)}
+                    <span className="font-semibold text-green-700">Clínica ({100 - preview.doctorPercentage}%):</span>{' '}
+                    {formatCurrency(preview.clinicShareBeforeCosts)}
                   </p>
                 </div>
               </div>
@@ -454,7 +484,10 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                 </p>
                 <div className="mt-2 p-2 bg-green-50 rounded">
                   <p className="text-xs text-gray-600">
-                    Percentual efetivo: {preview.effectiveClinicPercentage.toFixed(1)}%
+                    Percentual efetivo sobre valor bruto: 
+                    <span className="font-bold text-green-700 ml-1">
+                      {preview.effectiveClinicPercentage.toFixed(1)}%
+                    </span>
                   </p>
                 </div>
               </div>
