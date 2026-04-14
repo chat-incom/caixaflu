@@ -2,9 +2,9 @@
 
 export interface FinancialCalculation {
   grossValue: number;
-  doctorPercentage: number;
-  doctorAmount: number;
-  clinicShareBeforeCosts: number;
+  clinicPercentage: number;  // % que fica para a clínica
+  clinicAmount: number;      // valor que fica para a clínica (antes dos custos)
+  doctorAmount: number;      // valor que vai para o médico
   paymentTaxRate: number;
   paymentTaxAmount: number;
   invoiceTaxRate: number;
@@ -13,13 +13,21 @@ export interface FinancialCalculation {
   suppliesCost: number;
   otherCosts: number;
   totalDeductions: number;
-  netClinicValue: number;
+  netClinicValue: number;    // valor líquido final para clínica
   effectiveClinicPercentage: number;
 }
 
+export const PROCEDURE_TYPES = [
+  { value: 'Consulta', label: 'Consulta', clinicPercentage: 20 },        // 20% para clínica, 80% médico
+  { value: 'Infiltrações', label: 'Infiltrações', clinicPercentage: 40 }, // 40% para clínica, 60% médico
+  { value: 'Onda de Choque', label: 'Onda de Choque', clinicPercentage: 30 }, // 30% para clínica, 70% médico
+  { value: 'Cirurgia Particular', label: 'Cirurgia Particular', clinicPercentage: 18 }, // 18% para clínica, 82% médico
+  { value: 'Médico Parceiro', label: 'Médico Parceiro', clinicPercentage: 50 } // 50% para clínica, 50% médico
+];
+
 export const calculateClinicalFinance = (
   grossValue: number,
-  doctorPercentage: number,
+  clinicPercentage: number,  // Agora é o percentual da clínica
   paymentMethod: string,
   paymentTaxRate: number,
   invoiceTaxRate: number,
@@ -27,36 +35,36 @@ export const calculateClinicalFinance = (
   suppliesCost: number = 0,
   otherCosts: number = 0
 ): FinancialCalculation => {
-  // 1. Valor do médico
-  const doctorAmount = (grossValue * doctorPercentage) / 100;
+  // 1. Valor que fica para a clínica (antes dos custos)
+  const clinicAmount = (grossValue * clinicPercentage) / 100;
   
-  // 2. Participação da clínica antes dos custos
-  const clinicShareBeforeCosts = grossValue - doctorAmount;
+  // 2. Valor que vai para o médico
+  const doctorAmount = grossValue - clinicAmount;
   
-  // 3. Taxas de pagamento
+  // 3. Taxas de pagamento (geralmente sobre o valor bruto)
   let paymentTaxAmount = 0;
   if (paymentMethod !== 'cash' && paymentTaxRate > 0) {
     paymentTaxAmount = (grossValue * paymentTaxRate) / 100;
   }
   
-  // 4. Impostos
+  // 4. Impostos (sobre o valor bruto)
   const invoiceTaxAmount = (grossValue * invoiceTaxRate) / 100;
   
-  // 5. Total de deduções
-  const totalDeductions = doctorAmount + paymentTaxAmount + invoiceTaxAmount + 
+  // 5. Total de deduções da clínica
+  const totalDeductions = paymentTaxAmount + invoiceTaxAmount + 
                           medicationCost + suppliesCost + otherCosts;
   
-  // 6. Valor líquido para clínica
-  const netClinicValue = grossValue - totalDeductions;
+  // 6. Valor líquido para clínica (o que sobra após todos os custos)
+  const netClinicValue = clinicAmount - totalDeductions;
   
-  // 7. Percentual efetivo para clínica
+  // 7. Percentual efetivo para clínica sobre o valor bruto
   const effectiveClinicPercentage = (netClinicValue / grossValue) * 100;
   
   return {
     grossValue,
-    doctorPercentage,
+    clinicPercentage,
+    clinicAmount,
     doctorAmount,
-    clinicShareBeforeCosts,
     paymentTaxRate,
     paymentTaxAmount,
     invoiceTaxRate,
@@ -69,31 +77,3 @@ export const calculateClinicalFinance = (
     effectiveClinicPercentage
   };
 };
-
-export const getPaymentTaxRates = () => ({
-  credit_card: {
-    label: 'Cartão de Crédito',
-    defaultRate: 2.99, // % padrão
-    rates: [1.99, 2.49, 2.99, 3.49, 3.99]
-  },
-  debit_card: {
-    label: 'Cartão de Débito',
-    defaultRate: 1.99,
-    rates: [0.99, 1.49, 1.99, 2.49]
-  },
-  pix: {
-    label: 'PIX',
-    defaultRate: 0,
-    rates: [0]
-  },
-  cash: {
-    label: 'Dinheiro',
-    defaultRate: 0,
-    rates: [0]
-  },
-  deposito: {
-    label: 'Depósito',
-    defaultRate: 0,
-    rates: [0]
-  }
-});
