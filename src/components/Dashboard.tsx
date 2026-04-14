@@ -9,6 +9,9 @@ import { Logo } from './Logo';
 import { Transaction } from '../lib/supabase';
 import MedicalTransferForm from './MedicalTransferForm';
 import MedicalTransfersList from './MedicalTransfersList';
+import ClinicalFinancialForm from './ClinicalFinancialForm';
+import ClinicalResultsDashboard from './ClinicalResultsDashboard';
+import ClinicalMovementsList from './ClinicalMovementsList';
 import {
   Plus,
   LogOut,
@@ -22,6 +25,8 @@ import {
   Edit3,
   Edit2,
   Activity,
+  Stethoscope,
+  TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -33,8 +38,9 @@ export function Dashboard() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'month' | 'week'>('month');
-  const [activeTab, setActiveTab] = useState<'cashflow' | 'medical'>('cashflow');
+  const [activeTab, setActiveTab] = useState<'cashflow' | 'medical' | 'clinical'>('cashflow');
   const [medicalTransfersRefresh, setMedicalTransfersRefresh] = useState(0);
+  const [clinicalMovementsRefresh, setClinicalMovementsRefresh] = useState(0);
 
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
@@ -260,6 +266,20 @@ export function Dashboard() {
               <Activity size={20} />
               <span>Repasse Médico</span>
               {activeTab === 'medical' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('clinical')}
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition relative ${
+                activeTab === 'clinical'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Stethoscope size={20} />
+              <span>Financeiro Clínica</span>
+              {activeTab === 'clinical' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
@@ -587,8 +607,26 @@ export function Dashboard() {
             />
             <MedicalTransfersList
               refreshTrigger={medicalTransfersRefresh}
+              onTransferDeleted={() => setMedicalTransfersRefresh(prev => prev + 1)}
             />
           </>
+        )}
+
+        {activeTab === 'clinical' && (
+          <div className="space-y-6">
+            {/* Dashboard de Resultados */}
+            <ClinicalResultsDashboard />
+            
+            {/* Formulário de Registro Financeiro Clínico */}
+            <ClinicalFinancialForm 
+              onSuccess={() => setClinicalMovementsRefresh(prev => prev + 1)}
+            />
+            
+            {/* Lista de Movimentos Financeiros Clínicos */}
+            <ClinicalMovementsList 
+              refreshTrigger={clinicalMovementsRefresh}
+            />
+          </div>
         )}
       </div>
 
