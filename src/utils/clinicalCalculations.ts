@@ -25,6 +25,34 @@ export const PROCEDURE_TYPES = [
   { value: 'Médico Parceiro', label: 'Médico Parceiro', clinicPercentage: 50 } // 50% para clínica, 50% médico
 ];
 
+export const getPaymentTaxRates = () => ({
+  credit_card: {
+    label: 'Cartão de Crédito',
+    defaultRate: 2.99,
+    rates: [1.99, 2.49, 2.99, 3.49, 3.99]
+  },
+  debit_card: {
+    label: 'Cartão de Débito',
+    defaultRate: 1.99,
+    rates: [0.99, 1.49, 1.99, 2.49]
+  },
+  pix: {
+    label: 'PIX',
+    defaultRate: 0,
+    rates: [0]
+  },
+  cash: {
+    label: 'Dinheiro',
+    defaultRate: 0,
+    rates: [0]
+  },
+  deposito: {
+    label: 'Depósito',
+    defaultRate: 0,
+    rates: [0]
+  }
+});
+
 export const calculateClinicalFinance = (
   grossValue: number,
   clinicPercentage: number,  // Agora é o percentual da clínica
