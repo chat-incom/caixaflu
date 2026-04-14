@@ -10,8 +10,7 @@ import { Transaction } from '../lib/supabase';
 import MedicalTransferForm from './MedicalTransferForm';
 import MedicalTransfersList from './MedicalTransfersList';
 import ClinicalFinancialForm from './ClinicalFinancialForm';
-import ClinicalResultsDashboard from './ClinicalResultsDashboard';
-import ClinicalMovementsList from './ClinicalMovementsList';
+import ClinicalDashboard from './ClinicalDashboard';
 import {
   Plus,
   LogOut,
@@ -26,7 +25,6 @@ import {
   Edit2,
   Activity,
   Stethoscope,
-  TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -128,8 +126,8 @@ export function Dashboard() {
       .reduce((sum, t) => sum + t.amount, 0);
 
     const investimentosExpenses = filteredTransactions
-    .filter(t => t.type === 'expense' && t.category === 'investimentos')
-    .reduce((sum, t) => sum + t.amount, 0);
+      .filter(t => t.type === 'expense' && t.category === 'investimentos')
+      .reduce((sum, t) => sum + t.amount, 0);
 
     const currentBalance = (initialBalance?.amount || 0) + income - expenses;
 
@@ -144,7 +142,9 @@ export function Dashboard() {
     filteredTransactions
       .filter(t => t.type === 'income' && t.payment_method)
       .forEach(t => {
-        incomeByMethod[t.payment_method!] += t.amount;
+        if (t.payment_method) {
+          incomeByMethod[t.payment_method as keyof typeof incomeByMethod] += t.amount;
+        }
       });
 
     return {
@@ -290,313 +290,311 @@ export function Dashboard() {
           <>
             <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium opacity-90">Saldo Atual</span>
-                <Wallet size={20} />
-              </div>
-              <p className="text-2xl font-bold">{formatCurrency(summary.currentBalance)}</p>
-            </div>
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium opacity-90">Saldo Atual</span>
+                    <Wallet size={20} />
+                  </div>
+                  <p className="text-2xl font-bold">{formatCurrency(summary.currentBalance)}</p>
+                </div>
 
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium opacity-90">Entradas</span>
-                <TrendingUp size={20} />
-              </div>
-              <p className="text-2xl font-bold">{formatCurrency(summary.income)}</p>
-            </div>
+                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium opacity-90">Entradas</span>
+                    <TrendingUp size={20} />
+                  </div>
+                  <p className="text-2xl font-bold">{formatCurrency(summary.income)}</p>
+                </div>
 
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium opacity-90">Saídas</span>
-                <TrendingDown size={20} />
-              </div>
-              <p className="text-2xl font-bold">{formatCurrency(summary.expenses)}</p>
-            </div>
+                <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 text-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium opacity-90">Saídas</span>
+                    <TrendingDown size={20} />
+                  </div>
+                  <p className="text-2xl font-bold">{formatCurrency(summary.expenses)}</p>
+                </div>
 
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white relative group">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium opacity-90">Saldo Inicial</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowEditBalance(true)}
-                    className="opacity-0 group-hover:opacity-100 transition bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-1.5"
-                    title="Editar saldo inicial"
-                  >
-                    <Edit3 size={16} />
-                  </button>
-                  <DollarSign size={20} />
-                </div>
-              </div>
-              <p className="text-2xl font-bold">{formatCurrency(initialBalance?.amount || 0)}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <h3 className="font-semibold text-gray-800 mb-3">Entradas por Método</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">PIX:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.pix)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Dinheiro:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.cash)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Débito:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.debit_card)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Crédito:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.credit_card)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Depósito:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.incomeByMethod.deposito)}
-                  </span>
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white relative group">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium opacity-90">Saldo Inicial</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowEditBalance(true)}
+                        className="opacity-0 group-hover:opacity-100 transition bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-1.5"
+                        title="Editar saldo inicial"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <DollarSign size={20} />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold">{formatCurrency(initialBalance?.amount || 0)}</p>
                 </div>
               </div>
-            </div>
 
-            <div className="bg-gray-50 rounded-xl p-4">
-              <h3 className="font-semibold text-gray-800 mb-3">Saídas por Categoria</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Despesas Fixas:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.fixedExpenses)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Despesas Variáveis:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.variableExpenses)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Impostos e afins:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.taxExpenses)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Repasse Médico:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.medicalRepassExpenses)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Adiantamentos:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.advanceExpenses)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Faturas:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.faturaExpenses)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Investimentos:</span>
-                  <span className="font-semibold text-gray-800">
-                    {formatCurrency(summary.investimentosExpenses)}
-                  </span>
-                </div>
-
-                <div className="pt-2 mt-2 border-t border-gray-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 font-medium">Total de Saídas:</span>
-                    <span className="font-bold text-gray-800">
-                      {formatCurrency(summary.expenses)}
-                    </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3">Entradas por Método</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">PIX:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.incomeByMethod.pix)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Dinheiro:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.incomeByMethod.cash)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Débito:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.incomeByMethod.debit_card)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Crédito:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.incomeByMethod.credit_card)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Depósito:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.incomeByMethod.deposito)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setPeriodFilter('week')}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  periodFilter === 'week'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Última Semana
-              </button>
-              <button
-                onClick={() => setPeriodFilter('month')}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  periodFilter === 'month'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Último Mês
-              </button>
-              <button
-                onClick={() => setPeriodFilter('all')}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  periodFilter === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Tudo
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowTransactionForm(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition"
-            >
-              <Plus size={20} />
-              Nova Transação
-            </button>
-          </div>
-        </div>
-
-        {availableMonths.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FileText size={24} />
-              Ver Detalhes por Mês
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {availableMonths.map(month => {
-                const monthData = getMonthBalance.get(month);
-                if (!monthData) return null;
-
-                return (
-                  <button
-                    key={month}
-                    onClick={() => handleOpenMonthDetails(month)}
-                    className="bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border-2 border-blue-200 rounded-xl p-4 text-left transition group"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-blue-800 capitalize">
-                        {formatMonthLabel(month)}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-800 mb-3">Saídas por Categoria</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Despesas Fixas:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.fixedExpenses)}
                       </span>
-                      <Calendar size={16} className="text-blue-600" />
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Saldo Inicial:</span>
-                        <span className="font-semibold text-gray-700">{formatCurrency(monthData.initial)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Entradas:</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(monthData.income)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">Saídas:</span>
-                        <span className="font-semibold text-red-600">{formatCurrency(monthData.expense)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs pt-1 border-t border-blue-200">
-                        <span className="text-gray-700 font-medium">Saldo Final:</span>
-                        <span className={`font-bold ${monthData.final >= 0 ? 'text-blue-700' : 'text-orange-600'}`}>
-                          {formatCurrency(monthData.final)}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Despesas Variáveis:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.variableExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Impostos:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.taxExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Repasse Médico:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.medicalRepassExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Adiantamentos:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.advanceExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Faturas:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.faturaExpenses)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Investimentos:</span>
+                      <span className="font-semibold text-gray-800">
+                        {formatCurrency(summary.investimentosExpenses)}
+                      </span>
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700 font-medium">Total de Saídas:</span>
+                        <span className="font-bold text-gray-800">
+                          {formatCurrency(summary.expenses)}
                         </span>
                       </div>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Transações</h2>
-
-          {filteredTransactions.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">Nenhuma transação encontrada.</p>
-              <p className="text-gray-400 mt-2">Adicione sua primeira transação para começar!</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredTransactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center gap-4 p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition group"
-                >
-                  <div
-                    className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                      transaction.type === 'income'
-                        ? 'bg-green-100 text-green-600'
-                        : 'bg-red-100 text-red-600'
-                    }`}
-                  >
-                    {transaction.type === 'income' ? (
-                      <TrendingUp size={20} />
-                    ) : (
-                      <TrendingDown size={20} />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800">{transaction.description}</p>
-                    <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                      <Calendar size={14} />
-                      <span>{formatDate(transaction.date)}</span>
-                      <span>•</span>
-                      {transaction.type === 'income' && transaction.payment_method && (
-                        <span>{getPaymentMethodLabel(transaction.payment_method)}</span>
-                      )}
-                      {transaction.type === 'expense' && transaction.category && (
-                        <span>{getCategoryLabel(transaction.category)}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex-shrink-0 text-right">
-                    <p
-                      className={`text-lg font-bold ${
-                        transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
-                      {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)}
-                    </p>
-                  </div>
-
-                  <div className="flex-shrink-0 flex items-center gap-2">
-                    <button
-                      onClick={() => setEditingTransaction(transaction)}
-                      className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"
-                      title="Editar transação"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(transaction.id)}
-                      className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
-                      title="Excluir transação"
-                    >
-                      <Trash2 size={18} />
-                    </button>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setPeriodFilter('week')}
+                    className={`px-4 py-2 rounded-lg font-medium transition ${
+                      periodFilter === 'week'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Última Semana
+                  </button>
+                  <button
+                    onClick={() => setPeriodFilter('month')}
+                    className={`px-4 py-2 rounded-lg font-medium transition ${
+                      periodFilter === 'month'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Último Mês
+                  </button>
+                  <button
+                    onClick={() => setPeriodFilter('all')}
+                    className={`px-4 py-2 rounded-lg font-medium transition ${
+                      periodFilter === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Tudo
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowTransactionForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition"
+                >
+                  <Plus size={20} />
+                  Nova Transação
+                </button>
+              </div>
+            </div>
+
+            {availableMonths.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <FileText size={24} />
+                  Ver Detalhes por Mês
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {availableMonths.map(month => {
+                    const monthData = getMonthBalance.get(month);
+                    if (!monthData) return null;
+
+                    return (
+                      <button
+                        key={month}
+                        onClick={() => handleOpenMonthDetails(month)}
+                        className="bg-gradient-to-br from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 border-2 border-blue-200 rounded-xl p-4 text-left transition group"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-blue-800 capitalize">
+                            {formatMonthLabel(month)}
+                          </span>
+                          <Calendar size={16} className="text-blue-600" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-600">Saldo Inicial:</span>
+                            <span className="font-semibold text-gray-700">{formatCurrency(monthData.initial)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-600">Entradas:</span>
+                            <span className="font-semibold text-green-600">{formatCurrency(monthData.income)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-600">Saídas:</span>
+                            <span className="font-semibold text-red-600">{formatCurrency(monthData.expense)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs pt-1 border-t border-blue-200">
+                            <span className="text-gray-700 font-medium">Saldo Final:</span>
+                            <span className={`font-bold ${monthData.final >= 0 ? 'text-blue-700' : 'text-orange-600'}`}>
+                              {formatCurrency(monthData.final)}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
+
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Transações</h2>
+
+              {filteredTransactions.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 text-lg">Nenhuma transação encontrada.</p>
+                  <p className="text-gray-400 mt-2">Adicione sua primeira transação para começar!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredTransactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-center gap-4 p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition group"
+                    >
+                      <div
+                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                          transaction.type === 'income'
+                            ? 'bg-green-100 text-green-600'
+                            : 'bg-red-100 text-red-600'
+                        }`}
+                      >
+                        {transaction.type === 'income' ? (
+                          <TrendingUp size={20} />
+                        ) : (
+                          <TrendingDown size={20} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800">{transaction.description}</p>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                          <Calendar size={14} />
+                          <span>{formatDate(transaction.date)}</span>
+                          <span>•</span>
+                          {transaction.type === 'income' && transaction.payment_method && (
+                            <span>{getPaymentMethodLabel(transaction.payment_method)}</span>
+                          )}
+                          {transaction.type === 'expense' && transaction.category && (
+                            <span>{getCategoryLabel(transaction.category)}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex-shrink-0 text-right">
+                        <p
+                          className={`text-lg font-bold ${
+                            transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                          }`}
+                        >
+                          {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)}
+                        </p>
+                      </div>
+
+                      <div className="flex-shrink-0 flex items-center gap-2">
+                        <button
+                          onClick={() => setEditingTransaction(transaction)}
+                          className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"
+                          title="Editar transação"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(transaction.id)}
+                          className="text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
+                          title="Excluir transação"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -614,18 +612,10 @@ export function Dashboard() {
 
         {activeTab === 'clinical' && (
           <div className="space-y-6">
-            {/* Dashboard de Resultados */}
-            <ClinicalResultsDashboard />
-            
-            {/* Formulário de Registro Financeiro Clínico */}
             <ClinicalFinancialForm 
               onSuccess={() => setClinicalMovementsRefresh(prev => prev + 1)}
             />
-            
-            {/* Lista de Movimentos Financeiros Clínicos */}
-            <ClinicalMovementsList 
-              refreshTrigger={clinicalMovementsRefresh}
-            />
+            <ClinicalDashboard />
           </div>
         )}
       </div>
