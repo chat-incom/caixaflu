@@ -2,9 +2,9 @@
 
 export interface FinancialCalculation {
   grossValue: number;
-  clinicPercentage: number;  // % que fica para a clínica
-  clinicAmount: number;      // valor que fica para a clínica (antes dos custos)
-  doctorAmount: number;      // valor que vai para o médico
+  doctorPercentage: number;     // % que vai para o médico
+  doctorAmount: number;         // valor que vai para o médico
+  clinicShareBeforeCosts: number; // participação da clínica antes dos custos
   paymentTaxRate: number;
   paymentTaxAmount: number;
   invoiceTaxRate: number;
@@ -13,16 +13,17 @@ export interface FinancialCalculation {
   suppliesCost: number;
   otherCosts: number;
   totalDeductions: number;
-  netClinicValue: number;    // valor líquido final para clínica
+  netClinicValue: number;       // valor líquido final para clínica
   effectiveClinicPercentage: number;
 }
 
+// Percentual do MÉDICO (o que ele recebe)
 export const PROCEDURE_TYPES = [
-  { value: 'Consulta', label: 'Consulta', clinicPercentage: 20 },        // 20% para clínica, 80% médico
-  { value: 'Infiltrações', label: 'Infiltrações', clinicPercentage: 40 }, // 40% para clínica, 60% médico
-  { value: 'Onda de Choque', label: 'Onda de Choque', clinicPercentage: 30 }, // 30% para clínica, 70% médico
-  { value: 'Cirurgia Particular', label: 'Cirurgia Particular', clinicPercentage: 18 }, // 18% para clínica, 82% médico
-  { value: 'Médico Parceiro', label: 'Médico Parceiro', clinicPercentage: 50 } // 50% para clínica, 50% médico
+  { value: 'Consulta', label: 'Consulta', doctorPercentage: 80 },        // Médico recebe 80%, clínica 20%
+  { value: 'Infiltrações', label: 'Infiltrações', doctorPercentage: 60 }, // Médico recebe 60%, clínica 40%
+  { value: 'Onda de Choque', label: 'Onda de Choque', doctorPercentage: 70 }, // Médico recebe 70%, clínica 30%
+  { value: 'Cirurgia Particular', label: 'Cirurgia Particular', doctorPercentage: 82 }, // Médico recebe 82%, clínica 18%
+  { value: 'Médico Parceiro', label: 'Médico Parceiro', doctorPercentage: 50 } // Médico recebe 50%, clínica 50%
 ];
 
 export const getPaymentTaxRates = () => ({
@@ -55,7 +56,7 @@ export const getPaymentTaxRates = () => ({
 
 export const calculateClinicalFinance = (
   grossValue: number,
-  clinicPercentage: number,  // Agora é o percentual da clínica
+  doctorPercentage: number,  // Percentual do médico
   paymentMethod: string,
   paymentTaxRate: number,
   invoiceTaxRate: number,
@@ -63,36 +64,36 @@ export const calculateClinicalFinance = (
   suppliesCost: number = 0,
   otherCosts: number = 0
 ): FinancialCalculation => {
-  // 1. Valor que fica para a clínica (antes dos custos)
-  const clinicAmount = (grossValue * clinicPercentage) / 100;
+  // 1. Valor que vai para o médico
+  const doctorAmount = (grossValue * doctorPercentage) / 100;
   
-  // 2. Valor que vai para o médico
-  const doctorAmount = grossValue - clinicAmount;
+  // 2. Participação da clínica antes dos custos
+  const clinicShareBeforeCosts = grossValue - doctorAmount;
   
-  // 3. Taxas de pagamento (geralmente sobre o valor bruto)
+  // 3. Taxas de pagamento
   let paymentTaxAmount = 0;
   if (paymentMethod !== 'cash' && paymentTaxRate > 0) {
     paymentTaxAmount = (grossValue * paymentTaxRate) / 100;
   }
   
-  // 4. Impostos (sobre o valor bruto)
+  // 4. Impostos
   const invoiceTaxAmount = (grossValue * invoiceTaxRate) / 100;
   
   // 5. Total de deduções da clínica
   const totalDeductions = paymentTaxAmount + invoiceTaxAmount + 
                           medicationCost + suppliesCost + otherCosts;
   
-  // 6. Valor líquido para clínica (o que sobra após todos os custos)
-  const netClinicValue = clinicAmount - totalDeductions;
+  // 6. Valor líquido para clínica
+  const netClinicValue = clinicShareBeforeCosts - totalDeductions;
   
-  // 7. Percentual efetivo para clínica sobre o valor bruto
+  // 7. Percentual efetivo para clínica
   const effectiveClinicPercentage = (netClinicValue / grossValue) * 100;
   
   return {
     grossValue,
-    clinicPercentage,
-    clinicAmount,
+    doctorPercentage,
     doctorAmount,
+    clinicShareBeforeCosts,
     paymentTaxRate,
     paymentTaxAmount,
     invoiceTaxRate,
