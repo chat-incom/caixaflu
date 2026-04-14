@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calculator, TrendingUp, TrendingDown } from 'lucide-react';
+import { Calculator, TrendingUp, TrendingDown, DollarSign, Pill, Package } from 'lucide-react';
 import { calculateClinicalFinance, PROCEDURE_TYPES, getPaymentTaxRates } from '../utils/clinicalCalculations';
 
 export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => void }) {
@@ -18,7 +18,8 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
     otherCosts: '',
     otherCostsDescription: '',
     installments: '1',
-    observations: ''
+    observations: '',
+    cashSettlementType: 'left_at_clinic' // 'doctor_took' ou 'left_at_clinic'
   });
 
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,10 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      // Inserir movimento financeiro - USANDO OS CAMPOS CORRETOS DO SEU SCHEMA
+      const hasMedication = (parseFloat(formData.medicationCost) || 0) > 0;
+      const hasOtherCosts = (parseFloat(formData.otherCosts) || 0) > 0;
+
+      // Inserir movimento financeiro
       const { error: movementError } = await supabase
         .from('clinical_financial_movements')
         .insert({
@@ -89,13 +93,13 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           total_deductions: preview.totalDeductions,
           net_clinic_value: preview.netClinicValue,
           installments: parseInt(formData.installments),
-          observations: formData.observations || null
+          observations: formData.observations || null,
+          cash_settlement_type: formData.paymentMethod === 'cash' ? formData.cashSettlementType : null,
+          has_medication: hasMedication,
+          has_other_costs: hasOtherCosts
         });
 
-      if (movementError) {
-        console.error('Erro detalhado:', movementError);
-        throw movementError;
-      }
+      if (movementError) throw movementError;
 
       // Criar transações no sistema financeiro
       // 1. Receita bruta total
@@ -111,8 +115,10 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         income_category: 'consultorio'
       });
 
-      // 2. Despesa: Repasse ao médico
-      if (preview.doctorAmount > 0) {
+      // 2. Despesa: Repasse ao médico (apenas se o médico não levou o dinheiro em espécie)
+      const shouldRecordDoctorExpense = !(formData.paymentMethod === 'cash' && formData.cashSettlementType === 'doctor_took');
+      
+      if (preview.doctorAmount > 0 && shouldRecordDoctorExpense) {
         await supabase.from('transactions').insert({
           user_id: user.id,
           type: 'expense',
@@ -156,11 +162,15 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       }
 
       const clinicPercentage = 100 - preview.doctorPercentage;
+      const settlementMessage = formData.paymentMethod === 'cash' && formData.cashSettlementType === 'doctor_took' 
+        ? '\n💰 Médico levou o dinheiro em espécie' 
+        : '';
+
       alert(`✅ Movimento registrado com sucesso!\n\n` +
         `💰 Valor bruto: ${formatCurrency(preview.grossValue)}\n` +
         `🏥 Clínica (${clinicPercentage}%): ${formatCurrency(preview.clinicShareBeforeCosts)}\n` +
         `📉 Deduções: -${formatCurrency(preview.totalDeductions)}\n` +
-        `✨ Líquido clínica: ${formatCurrency(preview.netClinicValue)}`);
+        `✨ Líquido clínica: ${formatCurrency(preview.netClinicValue)}${settlementMessage}`);
       
       onSuccess();
       
@@ -179,7 +189,8 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         otherCosts: '',
         otherCostsDescription: '',
         installments: '1',
-        observations: ''
+        observations: '',
+        cashSettlementType: 'left_at_clinic'
       });
       
     } catch (error) {
@@ -303,6 +314,42 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           </select>
         </div>
 
+        {/* Opção para pagamento em dinheiro */}
+        {formData.paymentMethod === 'cash' && (
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              💵 O que aconteceu com o dinheiro?
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  value="left_at_clinic"
+                  checked={formData.cashSettlementType === 'left_at_clinic'}
+                  onChange={(e) => handleInputChange('cashSettlementType', e.target.value)}
+                  className="text-blue-600"
+                />
+                <span>Médico deixou na clínica (fazer repasse depois)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  value="doctor_took"
+                  checked={formData.cashSettlementType === 'doctor_took'}
+                  onChange={(e) => handleInputChange('cashSettlementType', e.target.value)}
+                  className="text-blue-600"
+                />
+                <span>Médico levou o dinheiro no dia</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.cashSettlementType === 'doctor_took' 
+                ? '✅ O repasse não será registrado como despesa pois o médico já retirou o valor'
+                : '💰 O valor será registrado como despesa de repasse médico'}
+            </p>
+          </div>
+        )}
+
         {formData.paymentMethod !== 'cash' && formData.paymentMethod !== 'pix' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -335,12 +382,16 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         </div>
       </div>
 
-      {/* Custos Diretos */}
+      {/* Custos Diretos com indicadores visuais */}
       <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <h3 className="font-semibold text-gray-800 mb-3">Custos Diretos (Opcional)</h3>
+        <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <Package size={18} />
+          Custos Diretos (Opcional)
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+              <Pill size={16} className="text-blue-500" />
               Custo com Medicação
             </label>
             <input
@@ -351,6 +402,9 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
               className="w-full px-3 py-2 border rounded-md"
               placeholder="0,00"
             />
+            {parseFloat(formData.medicationCost) > 0 && (
+              <span className="absolute right-2 top-8 text-xs text-blue-600">💊</span>
+            )}
           </div>
 
           <div>
@@ -432,6 +486,9 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                   <p className="text-sm">
                     <span className="font-semibold text-blue-700">Médico ({preview.doctorPercentage}%):</span>{' '}
                     {formatCurrency(preview.doctorAmount)}
+                    {formData.paymentMethod === 'cash' && formData.cashSettlementType === 'doctor_took' && (
+                      <span className="ml-2 text-xs text-green-600">(✅ levou no dia)</span>
+                    )}
                   </p>
                   <p className="text-sm">
                     <span className="font-semibold text-green-700">Clínica ({100 - preview.doctorPercentage}%):</span>{' '}
@@ -456,13 +513,13 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                       </p>
                     )}
                     {preview.medicationCost > 0 && (
-                      <p className="text-sm text-orange-600">Medicação: -{formatCurrency(preview.medicationCost)}</p>
+                      <p className="text-sm text-orange-600">💊 Medicação: -{formatCurrency(preview.medicationCost)}</p>
                     )}
                     {preview.suppliesCost > 0 && (
-                      <p className="text-sm text-orange-600">Insumos: -{formatCurrency(preview.suppliesCost)}</p>
+                      <p className="text-sm text-orange-600">📦 Insumos: -{formatCurrency(preview.suppliesCost)}</p>
                     )}
                     {preview.otherCosts > 0 && (
-                      <p className="text-sm text-orange-600">Outros: -{formatCurrency(preview.otherCosts)}</p>
+                      <p className="text-sm text-orange-600">📋 Outros: -{formatCurrency(preview.otherCosts)}</p>
                     )}
                   </div>
                 </div>
