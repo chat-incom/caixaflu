@@ -1,9 +1,7 @@
 // src/components/ClinicalReport.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Calendar, User, X, Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { Calendar, User, X, Printer } from 'lucide-react';
 
 interface ClinicalMovement {
   id: string;
@@ -30,7 +28,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('all');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
-  const [generating, setGenerating] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchMovements();
@@ -101,139 +99,110 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
     return grouped;
   };
 
-  const generatePDF = async () => {
-    setGenerating(true);
+  const handlePrint = () => {
+    const printContent = reportRef.current?.innerHTML;
+    const originalTitle = document.title;
     
-    try {
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      let yOffset = 20;
-
-      // Título
-      doc.setFontSize(18);
-      doc.setTextColor(40, 40, 40);
-      doc.text('Relatório de Repasses Médicos', pageWidth / 2, yOffset, { align: 'center' });
-      yOffset += 10;
-
-      // Informações dos filtros
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      
-      if (selectedMonth !== 'all') {
-        doc.text(`Mês de Referência: ${formatMonth(selectedMonth)}`, 14, yOffset);
-        yOffset += 6;
+    if (printContent) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Relatório de Repasses Médicos</title>
+              <meta charset="utf-8">
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  margin: 40px;
+                  padding: 0;
+                  font-size: 12px;
+                }
+                .header {
+                  text-align: center;
+                  margin-bottom: 30px;
+                }
+                .header h1 {
+                  font-size: 18px;
+                  margin-bottom: 10px;
+                }
+                .header p {
+                  margin: 5px 0;
+                  color: #666;
+                }
+                .doctor-section {
+                  margin-bottom: 30px;
+                  page-break-inside: avoid;
+                }
+                .doctor-title {
+                  font-size: 14px;
+                  font-weight: bold;
+                  margin-bottom: 10px;
+                  padding-bottom: 5px;
+                  border-bottom: 2px solid #333;
+                }
+                .doctor-summary {
+                  margin-bottom: 10px;
+                  font-size: 11px;
+                  color: #555;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 20px;
+                }
+                th {
+                  background-color: #2c3e50;
+                  color: white;
+                  padding: 8px;
+                  text-align: left;
+                  font-size: 11px;
+                }
+                td {
+                  padding: 6px 8px;
+                  border-bottom: 1px solid #ddd;
+                  font-size: 10px;
+                }
+                .text-right {
+                  text-align: right;
+                }
+                .text-center {
+                  text-align: center;
+                }
+                .footer {
+                  text-align: center;
+                  margin-top: 40px;
+                  padding-top: 20px;
+                  border-top: 1px solid #ccc;
+                  font-size: 9px;
+                  color: #999;
+                }
+                @media print {
+                  body {
+                    margin: 20px;
+                  }
+                  .no-print {
+                    display: none;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+        printWindow.close();
       }
-      if (selectedDoctor !== 'all') {
-        doc.text(`Médico: ${selectedDoctor}`, 14, yOffset);
-        yOffset += 6;
-      }
-      
-      doc.text(`Data de emissão: ${new Date().toLocaleDateString('pt-BR')}`, 14, yOffset);
-      yOffset += 15;
-
-      const grouped = movementsByDoctor();
-      const doctors = Object.keys(grouped).sort();
-
-      for (let i = 0; i < doctors.length; i++) {
-        const doctorName = doctors[i];
-        const doctorMovements = grouped[doctorName];
-        
-        // Verificar se precisa de nova página
-        if (yOffset > 250) {
-          doc.addPage();
-          yOffset = 20;
-        }
-
-        // Cabeçalho do médico
-        doc.setFontSize(14);
-        doc.setTextColor(40, 40, 40);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Médico: ${doctorName}`, 14, yOffset);
-        yOffset += 8;
-        
-        // Totais do médico
-        const totalGross = doctorMovements.reduce((sum, m) => sum + m.gross_value, 0);
-        const totalNet = doctorMovements.reduce((sum, m) => sum + m.net_clinic_value, 0);
-        
-        doc.setFontSize(9);
-        doc.setTextColor(80, 80, 80);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Total de procedimentos: ${doctorMovements.length}`, 14, yOffset);
-        doc.text(`Total bruto: ${formatCurrency(totalGross)}`, 80, yOffset);
-        doc.text(`Total líquido clínica: ${formatCurrency(totalNet)}`, 140, yOffset);
-        yOffset += 10;
-
-        // Tabela de lançamentos do médico
-        const tableData = doctorMovements.map(m => [
-          formatDate(m.date),
-          m.procedure_type,
-          m.patient_name || '-',
-          formatCurrency(m.gross_value),
-          `${m.doctor_percentage}%`,
-          m.cash_settlement_type === 'doctor_took' ? 'Médico levou' : 'Clínica',
-          formatCurrency(m.net_clinic_value)
-        ]);
-
-        autoTable(doc, {
-          startY: yOffset,
-          head: [['Data', 'Procedimento', 'Paciente', 'Valor', '% Médico', 'Dinheiro', 'Líquido Clínica']],
-          body: tableData,
-          theme: 'striped',
-          headStyles: { 
-            fillColor: [41, 128, 185], 
-            textColor: 255, 
-            fontSize: 8,
-            fontStyle: 'bold'
-          },
-          bodyStyles: { fontSize: 8 },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 30 },
-            3: { cellWidth: 25, halign: 'right' },
-            4: { cellWidth: 20, halign: 'center' },
-            5: { cellWidth: 25, halign: 'center' },
-            6: { cellWidth: 30, halign: 'right' }
-          },
-          margin: { left: 14, right: 14 }
-        });
-
-        yOffset = (doc as any).lastAutoTable.finalY + 15;
-
-        // Adicionar linha de resumo do médico
-        if (yOffset < 270) {
-          doc.setDrawColor(200, 200, 200);
-          doc.line(14, yOffset - 5, pageWidth - 14, yOffset - 5);
-        }
-      }
-
-      // Rodapé
-      const pageCount = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(
-          `Relatório gerado em ${new Date().toLocaleString('pt-BR')} - Página ${i} de ${pageCount}`,
-          pageWidth / 2,
-          doc.internal.pageSize.getHeight() - 10,
-          { align: 'center' }
-        );
-      }
-
-      // Salvar PDF
-      const fileName = `relatorio_repasses_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
-      
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      alert('Erro ao gerar o relatório. Tente novamente.');
-    } finally {
-      setGenerating(false);
     }
   };
 
-  // Calcular totais para preview
+  const grouped = movementsByDoctor();
+  const doctors = Object.keys(grouped).sort();
+  
   const totals = {
     totalGross: filteredMovements.reduce((sum, m) => sum + m.gross_value, 0),
     totalNetClinic: filteredMovements.reduce((sum, m) => sum + m.net_clinic_value, 0),
@@ -252,12 +221,12 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Gerar Relatório de Repasses</h2>
-            <p className="text-sm text-gray-500 mt-1">Selecione os filtros e gere o PDF</p>
+            <h2 className="text-2xl font-bold text-gray-800">Relatório de Repasses Médicos</h2>
+            <p className="text-sm text-gray-500 mt-1">Selecione os filtros e gere o relatório</p>
           </div>
           <button
             onClick={onClose}
@@ -270,7 +239,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
         <div className="p-6">
           {/* Filtros */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-gray-800 mb-3">Filtros do Relatório</h3>
+            <h3 className="font-semibold text-gray-800 mb-3">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
@@ -312,56 +281,108 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
             </div>
           </div>
 
-          {/* Preview dos dados que serão exportados */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-gray-800 mb-3">Resumo dos dados</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-blue-600">Médicos</p>
-                <p className="text-xl font-bold text-blue-700">
-                  {selectedDoctor === 'all' ? Object.keys(movementsByDoctor()).length : 1}
-                </p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-green-600">Procedimentos</p>
-                <p className="text-xl font-bold text-green-700">{totals.totalCount}</p>
-              </div>
-              <div className="bg-orange-50 rounded-lg p-3 text-center">
-                <p className="text-xs text-orange-600">Total Líquido</p>
-                <p className="text-xl font-bold text-orange-700">{formatCurrency(totals.totalNetClinic)}</p>
+          {/* Conteúdo do Relatório */}
+          <div ref={reportRef} className="report-content">
+            {/* Cabeçalho */}
+            <div className="header text-center mb-6">
+              <h1 className="text-xl font-bold">RELATÓRIO DE REPASSES MÉDICOS</h1>
+              <p className="text-gray-600">
+                {selectedMonth !== 'all' ? `Mês: ${formatMonth(selectedMonth)}` : 'Período: Todos os meses'}
+              </p>
+              <p className="text-gray-600">
+                {selectedDoctor !== 'all' ? `Médico: ${selectedDoctor}` : 'Todos os médicos'}
+              </p>
+              <p className="text-gray-500 text-sm">
+                Data de emissão: {new Date().toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+
+            {/* Resumo Geral */}
+            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+              <h3 className="font-semibold text-gray-800 mb-2">Resumo Geral</h3>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-sm text-gray-600">Médicos</p>
+                  <p className="text-xl font-bold text-blue-600">{doctors.length}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Procedimentos</p>
+                  <p className="text-xl font-bold text-green-600">{totals.totalCount}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Líquido</p>
+                  <p className="text-xl font-bold text-orange-600">{formatCurrency(totals.totalNetClinic)}</p>
+                </div>
               </div>
             </div>
+
+            {/* Detalhes por Médico */}
+            {doctors.map(doctorName => {
+              const doctorMovements = grouped[doctorName];
+              const totalGross = doctorMovements.reduce((sum, m) => sum + m.gross_value, 0);
+              const totalNet = doctorMovements.reduce((sum, m) => sum + m.net_clinic_value, 0);
+              
+              return (
+                <div key={doctorName} className="doctor-section mb-6">
+                  <div className="doctor-title">
+                    <h3 className="font-bold text-gray-800">Médico: {doctorName}</h3>
+                  </div>
+                  <div className="doctor-summary flex gap-4 text-sm text-gray-600 mb-3">
+                    <span>Procedimentos: {doctorMovements.length}</span>
+                    <span>Total Bruto: {formatCurrency(totalGross)}</span>
+                    <span>Total Líquido: {formatCurrency(totalNet)}</span>
+                  </div>
+                  
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th className="text-left">Data</th>
+                        <th className="text-left">Procedimento</th>
+                        <th className="text-left">Paciente</th>
+                        <th className="text-right">Valor</th>
+                        <th className="text-center">% Médico</th>
+                        <th className="text-center">Dinheiro</th>
+                        <th className="text-right">Líquido Clínica</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doctorMovements.map(m => (
+                        <tr key={m.id}>
+                          <td>{formatDate(m.date)}</td>
+                          <td>{m.procedure_type}</td>
+                          <td>{m.patient_name || '-'}</td>
+                          <td className="text-right">{formatCurrency(m.gross_value)}</td>
+                          <td className="text-center">{m.doctor_percentage}%</td>
+                          <td className="text-center">
+                            {m.cash_settlement_type === 'doctor_took' ? 'Médico levou' : 'Clínica'}
+                          </td>
+                          <td className="text-right font-bold text-green-600">
+                            {formatCurrency(m.net_clinic_value)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Lista de médicos e quantidades */}
-          {selectedDoctor === 'all' && (
-            <div className="mb-6">
-              <h3 className="font-semibold text-gray-800 mb-2">Médicos incluídos:</h3>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(movementsByDoctor()).sort().map(doctor => (
-                  <span key={doctor} className="px-3 py-1 bg-gray-100 rounded-full text-sm">
-                    {doctor} ({movementsByDoctor()[doctor].length})
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Botões */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 mt-6 pt-4 border-t border-gray-200">
             <button
-              onClick={generatePDF}
-              disabled={generating || filteredMovements.length === 0}
+              onClick={handlePrint}
+              disabled={filteredMovements.length === 0}
               className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Download size={20} />
-              {generating ? 'Gerando PDF...' : 'Gerar Relatório PDF'}
+              <Printer size={20} />
+              Imprimir / Salvar PDF
             </button>
             <button
               onClick={onClose}
               className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition flex items-center justify-center gap-2 font-semibold"
             >
-              Cancelar
+              Fechar
             </button>
           </div>
 
