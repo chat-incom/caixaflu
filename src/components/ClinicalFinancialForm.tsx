@@ -1,3 +1,4 @@
+// src/components/ClinicalFinancialForm.tsx
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Calculator, TrendingUp, TrendingDown, DollarSign, Pill, Package } from 'lucide-react';
@@ -19,7 +20,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
     otherCostsDescription: '',
     installments: '1',
     observations: '',
-    cashSettlementType: 'left_at_clinic' // 'doctor_took' ou 'left_at_clinic'
+    cashSettlementType: 'left_at_clinic'
   });
 
   const [loading, setLoading] = useState(false);
@@ -67,7 +68,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       const hasMedication = (parseFloat(formData.medicationCost) || 0) > 0;
       const hasOtherCosts = (parseFloat(formData.otherCosts) || 0) > 0;
 
-      // Inserir movimento financeiro
+      // APENAS inserir movimento financeiro - SEM criar transações no fluxo de caixa
       const { error: movementError } = await supabase
         .from('clinical_financial_movements')
         .insert({
@@ -101,66 +102,6 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
 
       if (movementError) throw movementError;
 
-      // Criar transações no sistema financeiro
-      // 1. Receita bruta total
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        type: 'income',
-        amount: preview.grossValue,
-        description: `📋 ${formData.procedureType} - Dr. ${formData.doctorName}${formData.patientName ? ` (${formData.patientName})` : ''}`,
-        payment_method: formData.paymentMethod,
-        category: 'repasse_medico',
-        date: formData.date,
-        reference_month: formData.date.substring(0, 7),
-        income_category: 'consultorio'
-      });
-
-      // 2. Despesa: Repasse ao médico (apenas se o médico não levou o dinheiro em espécie)
-      const shouldRecordDoctorExpense = !(formData.paymentMethod === 'cash' && formData.cashSettlementType === 'doctor_took');
-      
-      if (preview.doctorAmount > 0 && shouldRecordDoctorExpense) {
-        await supabase.from('transactions').insert({
-          user_id: user.id,
-          type: 'expense',
-          amount: preview.doctorAmount,
-          description: `👨‍⚕️ Repasse médico - Dr. ${formData.doctorName} (${preview.doctorPercentage}% médico)`,
-          payment_method: formData.paymentMethod,
-          category: 'repasse_medico',
-          date: formData.date,
-          reference_month: formData.date.substring(0, 7),
-          subcategory: 'repasse_medico'
-        });
-      }
-
-      // 3. Despesa: Taxas de cartão
-      if (preview.paymentTaxAmount > 0) {
-        await supabase.from('transactions').insert({
-          user_id: user.id,
-          type: 'expense',
-          amount: preview.paymentTaxAmount,
-          description: `💳 Taxa ${paymentTaxRates[formData.paymentMethod as keyof typeof paymentTaxRates]?.label} - ${formData.procedureType}`,
-          payment_method: formData.paymentMethod,
-          category: 'variable',
-          date: formData.date,
-          reference_month: formData.date.substring(0, 7),
-          subcategory: 'taxas'
-        });
-      }
-
-      // 4. Despesa: Impostos
-      if (preview.invoiceTaxAmount > 0) {
-        await supabase.from('transactions').insert({
-          user_id: user.id,
-          type: 'expense',
-          amount: preview.invoiceTaxAmount,
-          description: `📄 Impostos (ISS/Nota Fiscal) - ${formData.procedureType}`,
-          payment_method: formData.paymentMethod,
-          category: 'imposto',
-          date: formData.date,
-          reference_month: formData.date.substring(0, 7)
-        });
-      }
-
       const clinicPercentage = 100 - preview.doctorPercentage;
       const settlementMessage = formData.paymentMethod === 'cash' && formData.cashSettlementType === 'doctor_took' 
         ? '\n💰 Médico levou o dinheiro em espécie' 
@@ -170,7 +111,9 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         `💰 Valor bruto: ${formatCurrency(preview.grossValue)}\n` +
         `🏥 Clínica (${clinicPercentage}%): ${formatCurrency(preview.clinicShareBeforeCosts)}\n` +
         `📉 Deduções: -${formatCurrency(preview.totalDeductions)}\n` +
-        `✨ Líquido clínica: ${formatCurrency(preview.netClinicValue)}${settlementMessage}`);
+        `✨ Líquido clínica: ${formatCurrency(preview.netClinicValue)}${settlementMessage}\n\n` +
+        `⚠️ Lembrete: Este é um registro GERENCIAL. Para o fluxo de caixa real,\n` +
+        `registre as transações na aba "Fluxo de Caixa".`);
       
       onSuccess();
       
@@ -219,8 +162,17 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           Registro Financeiro Clínica
         </h2>
         <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-          Clínica fica com {clinicPercentage}%
+          Registro Gerencial
         </div>
+      </div>
+
+      {/* Alerta informativo */}
+      <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+        <p className="text-sm text-yellow-800 flex items-center gap-2">
+          <span className="text-lg">⚠️</span>
+          Este é um registro GERENCIAL para análise da clínica. 
+          Não afeta o fluxo de caixa. Registre as transações financeiras reais na aba "Fluxo de Caixa".
+        </p>
       </div>
 
       {/* Dados Básicos */}
@@ -314,7 +266,6 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           </select>
         </div>
 
-        {/* Opção para pagamento em dinheiro */}
         {formData.paymentMethod === 'cash' && (
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -342,11 +293,6 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                 <span>Médico levou o dinheiro no dia</span>
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {formData.cashSettlementType === 'doctor_took' 
-                ? '✅ O repasse não será registrado como despesa pois o médico já retirou o valor'
-                : '💰 O valor será registrado como despesa de repasse médico'}
-            </p>
           </div>
         )}
 
@@ -382,14 +328,14 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         </div>
       </div>
 
-      {/* Custos Diretos com indicadores visuais */}
+      {/* Custos Diretos */}
       <div className="bg-gray-50 rounded-lg p-4 mb-6">
         <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
           <Package size={18} />
           Custos Diretos (Opcional)
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
               <Pill size={16} className="text-blue-500" />
               Custo com Medicação
@@ -402,9 +348,6 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
               className="w-full px-3 py-2 border rounded-md"
               placeholder="0,00"
             />
-            {parseFloat(formData.medicationCost) > 0 && (
-              <span className="absolute right-2 top-8 text-xs text-blue-600">💊</span>
-            )}
           </div>
 
           <div>
@@ -468,7 +411,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
           <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
             <Calculator className="text-blue-600" />
-            Demonstrativo Financeiro
+            Demonstrativo Financeiro (Gerencial)
           </h3>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -558,7 +501,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         disabled={loading}
         className="w-full bg-green-600 text-white py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 font-semibold text-lg"
       >
-        {loading ? 'Registrando...' : '💰 Registrar Movimento Financeiro'}
+        {loading ? 'Registrando...' : '📊 Registrar (Apenas Gerencial)'}
       </button>
     </form>
   );
