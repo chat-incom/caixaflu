@@ -1,7 +1,9 @@
 // src/components/ClinicalReport.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, Calendar, User, Printer, X, Download } from 'lucide-react';
+import { Calendar, User, X, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface ClinicalMovement {
   id: string;
@@ -13,18 +15,8 @@ interface ClinicalMovement {
   gross_value: number;
   doctor_percentage: number;
   doctor_amount: number;
-  clinic_share_before_costs: number;
-  payment_tax_amount: number;
-  invoice_tax_amount: number;
-  medication_cost: number;
-  supplies_cost: number;
-  other_costs: number;
-  other_costs_description: string;
-  total_deductions: number;
   net_clinic_value: number;
   cash_settlement_type: string;
-  has_medication: boolean;
-  has_other_costs: boolean;
 }
 
 interface ClinicalReportProps {
@@ -38,7 +30,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('all');
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([]);
-  const [reportType, setReportType] = useState<'summary' | 'detailed'>('summary');
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     fetchMovements();
@@ -53,8 +45,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
         .from('clinical_financial_movements')
         .select('*')
         .eq('user_id', user.id)
-        .order('reference_month', { ascending: false })
-        .order('date', { ascending: false });
+        .order('date', { ascending: true });
 
       if (error) throw error;
 
@@ -98,54 +89,156 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
     return matchMonth && matchDoctor;
   });
 
-  // Calcular deduções
-  const calculateTotalDeductions = (movement: ClinicalMovement) => {
-    return (movement.payment_tax_amount || 0) + 
-           (movement.invoice_tax_amount || 0) + 
-           (movement.medication_cost || 0) + 
-           (movement.supplies_cost || 0) + 
-           (movement.other_costs || 0);
+  // Agrupar por médico
+  const movementsByDoctor = () => {
+    const grouped: { [key: string]: ClinicalMovement[] } = {};
+    filteredMovements.forEach(m => {
+      if (!grouped[m.doctor_name]) {
+        grouped[m.doctor_name] = [];
+      }
+      grouped[m.doctor_name].push(m);
+    });
+    return grouped;
   };
 
-  // Totais gerais
+  const generatePDF = async () => {
+    setGenerating(true);
+    
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let yOffset = 20;
+
+      // Título
+      doc.setFontSize(18);
+      doc.setTextColor(40, 40, 40);
+      doc.text('Relatório de Repasses Médicos', pageWidth / 2, yOffset, { align: 'center' });
+      yOffset += 10;
+
+      // Informações dos filtros
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      
+      if (selectedMonth !== 'all') {
+        doc.text(`Mês de Referência: ${formatMonth(selectedMonth)}`, 14, yOffset);
+        yOffset += 6;
+      }
+      if (selectedDoctor !== 'all') {
+        doc.text(`Médico: ${selectedDoctor}`, 14, yOffset);
+        yOffset += 6;
+      }
+      
+      doc.text(`Data de emissão: ${new Date().toLocaleDateString('pt-BR')}`, 14, yOffset);
+      yOffset += 15;
+
+      const grouped = movementsByDoctor();
+      const doctors = Object.keys(grouped).sort();
+
+      for (let i = 0; i < doctors.length; i++) {
+        const doctorName = doctors[i];
+        const doctorMovements = grouped[doctorName];
+        
+        // Verificar se precisa de nova página
+        if (yOffset > 250) {
+          doc.addPage();
+          yOffset = 20;
+        }
+
+        // Cabeçalho do médico
+        doc.setFontSize(14);
+        doc.setTextColor(40, 40, 40);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Médico: ${doctorName}`, 14, yOffset);
+        yOffset += 8;
+        
+        // Totais do médico
+        const totalGross = doctorMovements.reduce((sum, m) => sum + m.gross_value, 0);
+        const totalNet = doctorMovements.reduce((sum, m) => sum + m.net_clinic_value, 0);
+        
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 80);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Total de procedimentos: ${doctorMovements.length}`, 14, yOffset);
+        doc.text(`Total bruto: ${formatCurrency(totalGross)}`, 80, yOffset);
+        doc.text(`Total líquido clínica: ${formatCurrency(totalNet)}`, 140, yOffset);
+        yOffset += 10;
+
+        // Tabela de lançamentos do médico
+        const tableData = doctorMovements.map(m => [
+          formatDate(m.date),
+          m.procedure_type,
+          m.patient_name || '-',
+          formatCurrency(m.gross_value),
+          `${m.doctor_percentage}%`,
+          m.cash_settlement_type === 'doctor_took' ? 'Médico levou' : 'Clínica',
+          formatCurrency(m.net_clinic_value)
+        ]);
+
+        autoTable(doc, {
+          startY: yOffset,
+          head: [['Data', 'Procedimento', 'Paciente', 'Valor', '% Médico', 'Dinheiro', 'Líquido Clínica']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: { 
+            fillColor: [41, 128, 185], 
+            textColor: 255, 
+            fontSize: 8,
+            fontStyle: 'bold'
+          },
+          bodyStyles: { fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 25, halign: 'right' },
+            4: { cellWidth: 20, halign: 'center' },
+            5: { cellWidth: 25, halign: 'center' },
+            6: { cellWidth: 30, halign: 'right' }
+          },
+          margin: { left: 14, right: 14 }
+        });
+
+        yOffset = (doc as any).lastAutoTable.finalY + 15;
+
+        // Adicionar linha de resumo do médico
+        if (yOffset < 270) {
+          doc.setDrawColor(200, 200, 200);
+          doc.line(14, yOffset - 5, pageWidth - 14, yOffset - 5);
+        }
+      }
+
+      // Rodapé
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          `Relatório gerado em ${new Date().toLocaleString('pt-BR')} - Página ${i} de ${pageCount}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
+
+      // Salvar PDF
+      const fileName = `relatorio_repasses_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+      
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar o relatório. Tente novamente.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Calcular totais para preview
   const totals = {
     totalGross: filteredMovements.reduce((sum, m) => sum + m.gross_value, 0),
-    totalDoctorAmount: filteredMovements.reduce((sum, m) => sum + m.doctor_amount, 0),
-    totalDeductions: filteredMovements.reduce((sum, m) => sum + calculateTotalDeductions(m), 0),
     totalNetClinic: filteredMovements.reduce((sum, m) => sum + m.net_clinic_value, 0),
     totalCount: filteredMovements.length
   };
-
-  // Resumo por médico
-  const doctorSummary = () => {
-    const summary: { [key: string]: any } = {};
-    filteredMovements.forEach(m => {
-      if (!summary[m.doctor_name]) {
-        summary[m.doctor_name] = {
-          doctorName: m.doctor_name,
-          totalGross: 0,
-          totalDoctorAmount: 0,
-          totalDeductions: 0,
-          totalNetClinic: 0,
-          procedureCount: 0,
-          procedures: {}
-        };
-      }
-      summary[m.doctor_name].totalGross += m.gross_value;
-      summary[m.doctor_name].totalDoctorAmount += m.doctor_amount;
-      summary[m.doctor_name].totalDeductions += calculateTotalDeductions(m);
-      summary[m.doctor_name].totalNetClinic += m.net_clinic_value;
-      summary[m.doctor_name].procedureCount++;
-      summary[m.doctor_name].procedures[m.procedure_type] = (summary[m.doctor_name].procedures[m.procedure_type] || 0) + 1;
-    });
-    return Object.values(summary);
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const margin = totals.totalGross > 0 ? (totals.totalNetClinic / totals.totalGross) * 100 : 0;
 
   if (loading) {
     return (
@@ -159,12 +252,12 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-          <div className="flex items-center gap-3">
-            <FileText size={24} className="text-blue-600" />
-            <h2 className="text-2xl font-bold text-gray-800">Relatório Financeiro da Clínica</h2>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Gerar Relatório de Repasses</h2>
+            <p className="text-sm text-gray-500 mt-1">Selecione os filtros e gere o PDF</p>
           </div>
           <button
             onClick={onClose}
@@ -176,9 +269,9 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
 
         <div className="p-6">
           {/* Filtros */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 print:bg-white">
-            <h3 className="font-semibold text-gray-800 mb-3">Filtros</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-gray-800 mb-3">Filtros do Relatório</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                   <Calendar size={16} />
@@ -187,7 +280,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">Todos os meses</option>
                   {availableMonths.map(month => (
@@ -206,7 +299,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
                 <select
                   value={selectedDoctor}
                   onChange={(e) => setSelectedDoctor(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">Todos os médicos</option>
                   {availableDoctors.map(doctor => (
@@ -217,192 +310,68 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
                 </select>
               </div>
             </div>
+          </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setReportType('summary')}
-                className={`flex-1 py-2 rounded-lg font-medium transition ${
-                  reportType === 'summary'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Resumo por Médico
-              </button>
-              <button
-                onClick={() => setReportType('detailed')}
-                className={`flex-1 py-2 rounded-lg font-medium transition ${
-                  reportType === 'detailed'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Lançamentos Detalhados
-              </button>
+          {/* Preview dos dados que serão exportados */}
+          <div className="mb-6">
+            <h3 className="font-semibold text-gray-800 mb-3">Resumo dos dados</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-xs text-blue-600">Médicos</p>
+                <p className="text-xl font-bold text-blue-700">
+                  {selectedDoctor === 'all' ? Object.keys(movementsByDoctor()).length : 1}
+                </p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <p className="text-xs text-green-600">Procedimentos</p>
+                <p className="text-xl font-bold text-green-700">{totals.totalCount}</p>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-3 text-center">
+                <p className="text-xs text-orange-600">Total Líquido</p>
+                <p className="text-xl font-bold text-orange-700">{formatCurrency(totals.totalNetClinic)}</p>
+              </div>
             </div>
           </div>
 
-          {/* Conteúdo do Relatório - Para impressão */}
-          <div className="report-content">
-            {/* Cabeçalho do Relatório */}
-            <div className="text-center mb-6 print:block hidden">
-              <h1 className="text-2xl font-bold">Relatório Financeiro da Clínica</h1>
-              <p className="text-gray-600">
-                {selectedMonth !== 'all' ? `Mês: ${formatMonth(selectedMonth)}` : 'Todos os meses'}
-                {selectedDoctor !== 'all' && ` • Médico: ${selectedDoctor}`}
-              </p>
-              <p className="text-gray-500 text-sm">Data de emissão: {new Date().toLocaleDateString('pt-BR')}</p>
-            </div>
-
-            {/* Cards de Resumo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 print:grid-cols-4">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-                <p className="text-sm opacity-90">Procedimentos</p>
-                <p className="text-2xl font-bold">{totals.totalCount}</p>
-              </div>
-              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
-                <p className="text-sm opacity-90">Faturamento Bruto</p>
-                <p className="text-2xl font-bold">{formatCurrency(totals.totalGross)}</p>
-              </div>
-              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white">
-                <p className="text-sm opacity-90">Deduções</p>
-                <p className="text-2xl font-bold">{formatCurrency(totals.totalDeductions)}</p>
-              </div>
-              <div className="bg-gradient-to-br from-green-700 to-green-800 rounded-xl p-4 text-white">
-                <p className="text-sm opacity-90">Líquido Clínica</p>
-                <p className="text-2xl font-bold">{formatCurrency(totals.totalNetClinic)}</p>
-                <p className="text-xs opacity-75">Margem: {margin.toFixed(1)}%</p>
+          {/* Lista de médicos e quantidades */}
+          {selectedDoctor === 'all' && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-gray-800 mb-2">Médicos incluídos:</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(movementsByDoctor()).sort().map(doctor => (
+                  <span key={doctor} className="px-3 py-1 bg-gray-100 rounded-full text-sm">
+                    {doctor} ({movementsByDoctor()[doctor].length})
+                  </span>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Visualização dos dados */}
-            {reportType === 'summary' ? (
-              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Médico</th>
-                        <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Procedimentos</th>
-                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Faturamento</th>
-                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Repasses</th>
-                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Deduções</th>
-                        <th className="text-right py-3 px-4 text-sm font-semibold text-green-600">Líquido</th>
-                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Margem</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {doctorSummary().map((doctor: any) => {
-                        const marginDoctor = doctor.totalGross > 0 ? (doctor.totalNetClinic / doctor.totalGross) * 100 : 0;
-                        return (
-                          <tr key={doctor.doctorName} className="border-b border-gray-100">
-                            <td className="py-3 px-4 text-sm font-medium text-gray-800">{doctor.doctorName}</td>
-                            <td className="py-3 px-4 text-sm text-center text-gray-600">{doctor.procedureCount}</td>
-                            <td className="py-3 px-4 text-sm text-blue-600 text-right">{formatCurrency(doctor.totalGross)}</td>
-                            <td className="py-3 px-4 text-sm text-red-600 text-right">{formatCurrency(doctor.totalDoctorAmount)}</td>
-                            <td className="py-3 px-4 text-sm text-orange-600 text-right">{formatCurrency(doctor.totalDeductions)}</td>
-                            <td className="py-3 px-4 text-sm text-green-600 font-bold text-right">{formatCurrency(doctor.totalNetClinic)}</td>
-                            <td className="py-3 px-4 text-sm text-gray-700 text-right">{marginDoctor.toFixed(1)}%</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                      <tr>
-                        <td className="py-3 px-4 text-sm font-bold text-gray-800">Total</td>
-                        <td className="py-3 px-4 text-sm font-bold text-center text-gray-800">{totals.totalCount}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-red-600 text-right">{formatCurrency(totals.totalDoctorAmount)}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-orange-600 text-right">{formatCurrency(totals.totalDeductions)}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-gray-800 text-right">{margin.toFixed(1)}%</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Data</th>
-                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Médico</th>
-                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Paciente</th>
-                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Procedimento</th>
-                        <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">Valor</th>
-                        <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">% Médico</th>
-                        <th className="text-right py-3 px-3 text-sm font-semibold text-green-600">Líquido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMovements.map((movement) => (
-                        <tr key={movement.id} className="border-b border-gray-100">
-                          <td className="py-3 px-3 text-sm text-gray-600">{formatDate(movement.date)}</td>
-                          <td className="py-3 px-3 text-sm font-medium text-gray-800">{movement.doctor_name}</td>
-                          <td className="py-3 px-3 text-sm text-gray-600">{movement.patient_name || '-'}</td>
-                          <td className="py-3 px-3 text-sm text-gray-700">{movement.procedure_type}</td>
-                          <td className="py-3 px-3 text-sm text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
-                          <td className="py-3 px-3 text-sm text-gray-600 text-center">{movement.doctor_percentage}%</td>
-                          <td className="py-3 px-3 text-sm text-green-600 font-bold text-right">{formatCurrency(movement.net_clinic_value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                      <tr>
-                        <td colSpan={4} className="py-3 px-3 text-sm font-bold text-gray-800 text-right">Total:</td>
-                        <td className="py-3 px-3 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
-                        <td className="py-3 px-3"></td>
-                        <td className="py-3 px-3 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Botões de ação */}
-          <div className="flex gap-3 sticky bottom-0 bg-white pt-4 border-t border-gray-200 print:hidden">
+          {/* Botões */}
+          <div className="flex gap-3">
             <button
-              onClick={handlePrint}
-              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 font-semibold"
+              onClick={generatePDF}
+              disabled={generating || filteredMovements.length === 0}
+              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Printer size={20} />
-              Imprimir / Salvar como PDF
+              <Download size={20} />
+              {generating ? 'Gerando PDF...' : 'Gerar Relatório PDF'}
             </button>
             <button
               onClick={onClose}
               className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition flex items-center justify-center gap-2 font-semibold"
             >
-              Fechar
+              Cancelar
             </button>
           </div>
+
+          {filteredMovements.length === 0 && (
+            <p className="text-center text-red-500 text-sm mt-4">
+              Nenhum movimento encontrado com os filtros selecionados.
+            </p>
+          )}
         </div>
       </div>
-
-      <style>{`
-        @media print {
-          .fixed {
-            position: relative !important;
-            background: white !important;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-          .print\\:block {
-            display: block !important;
-          }
-          .print\\:grid-cols-4 {
-            display: grid !important;
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-          }
-          body {
-            padding: 20px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
