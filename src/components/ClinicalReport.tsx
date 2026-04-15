@@ -1,9 +1,7 @@
 // src/components/ClinicalReport.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, Download, Calendar, User, Printer, X } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { FileText, Calendar, User, Printer, X, Download } from 'lucide-react';
 
 interface ClinicalMovement {
   id: string;
@@ -100,16 +98,25 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
     return matchMonth && matchDoctor;
   });
 
-  // Calcular totais
+  // Calcular deduções
+  const calculateTotalDeductions = (movement: ClinicalMovement) => {
+    return (movement.payment_tax_amount || 0) + 
+           (movement.invoice_tax_amount || 0) + 
+           (movement.medication_cost || 0) + 
+           (movement.supplies_cost || 0) + 
+           (movement.other_costs || 0);
+  };
+
+  // Totais gerais
   const totals = {
     totalGross: filteredMovements.reduce((sum, m) => sum + m.gross_value, 0),
     totalDoctorAmount: filteredMovements.reduce((sum, m) => sum + m.doctor_amount, 0),
-    totalDeductions: filteredMovements.reduce((sum, m) => sum + (m.payment_tax_amount + m.invoice_tax_amount + m.medication_cost + m.supplies_cost + m.other_costs), 0),
+    totalDeductions: filteredMovements.reduce((sum, m) => sum + calculateTotalDeductions(m), 0),
     totalNetClinic: filteredMovements.reduce((sum, m) => sum + m.net_clinic_value, 0),
     totalCount: filteredMovements.length
   };
 
-  // Agrupar por médico para relatório resumido
+  // Resumo por médico
   const doctorSummary = () => {
     const summary: { [key: string]: any } = {};
     filteredMovements.forEach(m => {
@@ -126,7 +133,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
       }
       summary[m.doctor_name].totalGross += m.gross_value;
       summary[m.doctor_name].totalDoctorAmount += m.doctor_amount;
-      summary[m.doctor_name].totalDeductions += (m.payment_tax_amount + m.invoice_tax_amount + m.medication_cost + m.supplies_cost + m.other_costs);
+      summary[m.doctor_name].totalDeductions += calculateTotalDeductions(m);
       summary[m.doctor_name].totalNetClinic += m.net_clinic_value;
       summary[m.doctor_name].procedureCount++;
       summary[m.doctor_name].procedures[m.procedure_type] = (summary[m.doctor_name].procedures[m.procedure_type] || 0) + 1;
@@ -134,133 +141,8 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
     return Object.values(summary);
   };
 
-  // Gerar PDF
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Título
-    doc.setFontSize(20);
-    doc.setTextColor(40, 40, 40);
-    doc.text('Relatório Financeiro - Clínica', pageWidth / 2, 20, { align: 'center' });
-    
-    // Filtros aplicados
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    let yPos = 30;
-    
-    if (selectedMonth !== 'all') {
-      doc.text(`Mês: ${formatMonth(selectedMonth)}`, 14, yPos);
-      yPos += 6;
-    }
-    if (selectedDoctor !== 'all') {
-      doc.text(`Médico: ${selectedDoctor}`, 14, yPos);
-      yPos += 6;
-    }
-    
-    doc.text(`Data de emissão: ${new Date().toLocaleDateString('pt-BR')}`, 14, yPos);
-    yPos += 10;
-    
-    // Resumo geral
-    doc.setFontSize(14);
-    doc.setTextColor(40, 40, 40);
-    doc.text('Resumo Geral', 14, yPos);
-    yPos += 8;
-    
-    const summaryData = [
-      ['Total de Procedimentos', totals.totalCount.toString()],
-      ['Faturamento Bruto', formatCurrency(totals.totalGross)],
-      ['Repasses aos Médicos', formatCurrency(totals.totalDoctorAmount)],
-      ['Deduções Totais', formatCurrency(totals.totalDeductions)],
-      ['Resultado Líquido da Clínica', formatCurrency(totals.totalNetClinic)],
-      ['Margem Efetiva', `${totals.totalGross > 0 ? ((totals.totalNetClinic / totals.totalGross) * 100).toFixed(1) : 0}%`]
-    ];
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Indicador', 'Valor']],
-      body: summaryData,
-      theme: 'striped',
-      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 10 },
-      bodyStyles: { fontSize: 9 },
-      columnStyles: {
-        0: { cellWidth: 80 },
-        1: { cellWidth: 50 }
-      }
-    });
-    
-    yPos = (doc as any).lastAutoTable.finalY + 10;
-    
-    if (reportType === 'summary') {
-      // Relatório por Médico
-      doc.setFontSize(14);
-      doc.text('Resumo por Médico', 14, yPos);
-      yPos += 8;
-      
-      const doctorData = doctorSummary().map(d => [
-        d.doctorName,
-        d.procedureCount.toString(),
-        formatCurrency(d.totalGross),
-        formatCurrency(d.totalDoctorAmount),
-        formatCurrency(d.totalNetClinic),
-        `${d.totalGross > 0 ? ((d.totalNetClinic / d.totalGross) * 100).toFixed(1) : 0}%`
-      ]);
-      
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Médico', 'Qtd', 'Faturamento', 'Repasses', 'Líquido Clínica', 'Margem']],
-        body: doctorData,
-        theme: 'striped',
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 9 },
-        bodyStyles: { fontSize: 8 },
-        columnStyles: {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 20, halign: 'center' },
-          2: { cellWidth: 35, halign: 'right' },
-          3: { cellWidth: 35, halign: 'right' },
-          4: { cellWidth: 35, halign: 'right' },
-          5: { cellWidth: 25, halign: 'right' }
-        }
-      });
-    } else {
-      // Relatório Detalhado
-      doc.setFontSize(14);
-      doc.text('Lançamentos Detalhados', 14, yPos);
-      yPos += 8;
-      
-      const detailedData = filteredMovements.map(m => [
-        formatDate(m.date),
-        m.doctor_name,
-        m.patient_name || '-',
-        m.procedure_type,
-        formatCurrency(m.gross_value),
-        `${m.doctor_percentage}%`,
-        m.cash_settlement_type === 'doctor_took' ? 'Levou' : 'Clínica',
-        formatCurrency(m.net_clinic_value)
-      ]);
-      
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Data', 'Médico', 'Paciente', 'Procedimento', 'Valor', '% Médico', 'Dinheiro', 'Líquido']],
-        body: detailedData,
-        theme: 'striped',
-        headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 8 },
-        bodyStyles: { fontSize: 7 },
-        columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 35 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 35 },
-          4: { cellWidth: 25, halign: 'right' },
-          5: { cellWidth: 20, halign: 'center' },
-          6: { cellWidth: 20, halign: 'center' },
-          7: { cellWidth: 25, halign: 'right' }
-        }
-      });
-    }
-    
-    // Salvar PDF
-    doc.save(`relatorio_clinica_${new Date().toISOString().split('T')[0]}.pdf`);
+  const handlePrint = () => {
+    window.print();
   };
 
   const margin = totals.totalGross > 0 ? (totals.totalNetClinic / totals.totalGross) * 100 : 0;
@@ -294,7 +176,7 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
 
         <div className="p-6">
           {/* Filtros */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 print:bg-white">
             <h3 className="font-semibold text-gray-800 mb-3">Filtros</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -360,148 +242,167 @@ export default function ClinicalReport({ onClose }: ClinicalReportProps) {
             </div>
           </div>
 
-          {/* Cards de Resumo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-              <p className="text-sm opacity-90">Procedimentos</p>
-              <p className="text-2xl font-bold">{totals.totalCount}</p>
+          {/* Conteúdo do Relatório - Para impressão */}
+          <div className="report-content">
+            {/* Cabeçalho do Relatório */}
+            <div className="text-center mb-6 print:block hidden">
+              <h1 className="text-2xl font-bold">Relatório Financeiro da Clínica</h1>
+              <p className="text-gray-600">
+                {selectedMonth !== 'all' ? `Mês: ${formatMonth(selectedMonth)}` : 'Todos os meses'}
+                {selectedDoctor !== 'all' && ` • Médico: ${selectedDoctor}`}
+              </p>
+              <p className="text-gray-500 text-sm">Data de emissão: {new Date().toLocaleDateString('pt-BR')}</p>
             </div>
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
-              <p className="text-sm opacity-90">Faturamento Bruto</p>
-              <p className="text-2xl font-bold">{formatCurrency(totals.totalGross)}</p>
+
+            {/* Cards de Resumo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 print:grid-cols-4">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
+                <p className="text-sm opacity-90">Procedimentos</p>
+                <p className="text-2xl font-bold">{totals.totalCount}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 text-white">
+                <p className="text-sm opacity-90">Faturamento Bruto</p>
+                <p className="text-2xl font-bold">{formatCurrency(totals.totalGross)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white">
+                <p className="text-sm opacity-90">Deduções</p>
+                <p className="text-2xl font-bold">{formatCurrency(totals.totalDeductions)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-700 to-green-800 rounded-xl p-4 text-white">
+                <p className="text-sm opacity-90">Líquido Clínica</p>
+                <p className="text-2xl font-bold">{formatCurrency(totals.totalNetClinic)}</p>
+                <p className="text-xs opacity-75">Margem: {margin.toFixed(1)}%</p>
+              </div>
             </div>
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 text-white">
-              <p className="text-sm opacity-90">Deduções</p>
-              <p className="text-2xl font-bold">{formatCurrency(totals.totalDeductions)}</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-700 to-green-800 rounded-xl p-4 text-white">
-              <p className="text-sm opacity-90">Líquido Clínica</p>
-              <p className="text-2xl font-bold">{formatCurrency(totals.totalNetClinic)}</p>
-              <p className="text-xs opacity-75">Margem: {margin.toFixed(1)}%</p>
-            </div>
+
+            {/* Visualização dos dados */}
+            {reportType === 'summary' ? (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Médico</th>
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Procedimentos</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Faturamento</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Repasses</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Deduções</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-green-600">Líquido</th>
+                        <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Margem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doctorSummary().map((doctor: any) => {
+                        const marginDoctor = doctor.totalGross > 0 ? (doctor.totalNetClinic / doctor.totalGross) * 100 : 0;
+                        return (
+                          <tr key={doctor.doctorName} className="border-b border-gray-100">
+                            <td className="py-3 px-4 text-sm font-medium text-gray-800">{doctor.doctorName}</td>
+                            <td className="py-3 px-4 text-sm text-center text-gray-600">{doctor.procedureCount}</td>
+                            <td className="py-3 px-4 text-sm text-blue-600 text-right">{formatCurrency(doctor.totalGross)}</td>
+                            <td className="py-3 px-4 text-sm text-red-600 text-right">{formatCurrency(doctor.totalDoctorAmount)}</td>
+                            <td className="py-3 px-4 text-sm text-orange-600 text-right">{formatCurrency(doctor.totalDeductions)}</td>
+                            <td className="py-3 px-4 text-sm text-green-600 font-bold text-right">{formatCurrency(doctor.totalNetClinic)}</td>
+                            <td className="py-3 px-4 text-sm text-gray-700 text-right">{marginDoctor.toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                      <tr>
+                        <td className="py-3 px-4 text-sm font-bold text-gray-800">Total</td>
+                        <td className="py-3 px-4 text-sm font-bold text-center text-gray-800">{totals.totalCount}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-red-600 text-right">{formatCurrency(totals.totalDoctorAmount)}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-orange-600 text-right">{formatCurrency(totals.totalDeductions)}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-gray-800 text-right">{margin.toFixed(1)}%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Data</th>
+                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Médico</th>
+                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Paciente</th>
+                        <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Procedimento</th>
+                        <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">Valor</th>
+                        <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">% Médico</th>
+                        <th className="text-right py-3 px-3 text-sm font-semibold text-green-600">Líquido</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMovements.map((movement) => (
+                        <tr key={movement.id} className="border-b border-gray-100">
+                          <td className="py-3 px-3 text-sm text-gray-600">{formatDate(movement.date)}</td>
+                          <td className="py-3 px-3 text-sm font-medium text-gray-800">{movement.doctor_name}</td>
+                          <td className="py-3 px-3 text-sm text-gray-600">{movement.patient_name || '-'}</td>
+                          <td className="py-3 px-3 text-sm text-gray-700">{movement.procedure_type}</td>
+                          <td className="py-3 px-3 text-sm text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
+                          <td className="py-3 px-3 text-sm text-gray-600 text-center">{movement.doctor_percentage}%</td>
+                          <td className="py-3 px-3 text-sm text-green-600 font-bold text-right">{formatCurrency(movement.net_clinic_value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                      <tr>
+                        <td colSpan={4} className="py-3 px-3 text-sm font-bold text-gray-800 text-right">Total:</td>
+                        <td className="py-3 px-3 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
+                        <td className="py-3 px-3"></td>
+                        <td className="py-3 px-3 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Visualização dos dados */}
-          {reportType === 'summary' ? (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Médico</th>
-                      <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Procedimentos</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Faturamento</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Repasses</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Deduções</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-green-600">Líquido</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Margem</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {doctorSummary().map((doctor: any) => {
-                      const margin = doctor.totalGross > 0 ? (doctor.totalNetClinic / doctor.totalGross) * 100 : 0;
-                      return (
-                        <tr key={doctor.doctorName} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-sm font-medium text-gray-800">{doctor.doctorName}</td>
-                          <td className="py-3 px-4 text-sm text-center text-gray-600">{doctor.procedureCount}</td>
-                          <td className="py-3 px-4 text-sm text-blue-600 text-right">{formatCurrency(doctor.totalGross)}</td>
-                          <td className="py-3 px-4 text-sm text-red-600 text-right">{formatCurrency(doctor.totalDoctorAmount)}</td>
-                          <td className="py-3 px-4 text-sm text-orange-600 text-right">{formatCurrency(doctor.totalDeductions)}</td>
-                          <td className="py-3 px-4 text-sm text-green-600 font-bold text-right">{formatCurrency(doctor.totalNetClinic)}</td>
-                          <td className="py-3 px-4 text-sm text-gray-700 text-right">{margin.toFixed(1)}%</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                    <tr>
-                      <td className="py-3 px-4 text-sm font-bold text-gray-800">Total</td>
-                      <td className="py-3 px-4 text-sm font-bold text-center text-gray-800">{totals.totalCount}</td>
-                      <td className="py-3 px-4 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
-                      <td className="py-3 px-4 text-sm font-bold text-red-600 text-right">{formatCurrency(totals.totalDoctorAmount)}</td>
-                      <td className="py-3 px-4 text-sm font-bold text-orange-600 text-right">{formatCurrency(totals.totalDeductions)}</td>
-                      <td className="py-3 px-4 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
-                      <td className="py-3 px-4 text-sm font-bold text-gray-800 text-right">{margin.toFixed(1)}%</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Data</th>
-                      <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Médico</th>
-                      <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Paciente</th>
-                      <th className="text-left py-3 px-3 text-sm font-semibold text-gray-700">Procedimento</th>
-                      <th className="text-right py-3 px-3 text-sm font-semibold text-gray-700">Valor</th>
-                      <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">% Médico</th>
-                      <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">Dinheiro</th>
-                      <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">💊</th>
-                      <th className="text-center py-3 px-3 text-sm font-semibold text-gray-700">📋</th>
-                      <th className="text-right py-3 px-3 text-sm font-semibold text-green-600">Líquido</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMovements.map((movement) => (
-                      <tr key={movement.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-3 text-sm text-gray-600">{formatDate(movement.date)}</td>
-                        <td className="py-3 px-3 text-sm font-medium text-gray-800">{movement.doctor_name}</td>
-                        <td className="py-3 px-3 text-sm text-gray-600">{movement.patient_name || '-'}</td>
-                        <td className="py-3 px-3 text-sm text-gray-700">{movement.procedure_type}</td>
-                        <td className="py-3 px-3 text-sm text-blue-600 text-right">{formatCurrency(movement.gross_value)}</td>
-                        <td className="py-3 px-3 text-sm text-gray-600 text-center">{movement.doctor_percentage}%</td>
-                        <td className="py-3 px-3 text-sm text-center">
-                          {movement.cash_settlement_type === 'doctor_took' ? 'Levou' : movement.payment_method === 'cash' ? 'Na clínica' : '-'}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {movement.has_medication ? '✅' : '-'}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {movement.has_other_costs ? '✅' : '-'}
-                        </td>
-                        <td className="py-3 px-3 text-sm text-green-600 font-bold text-right">{formatCurrency(movement.net_clinic_value)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                    <tr>
-                      <td colSpan={4} className="py-3 px-3 text-sm font-bold text-gray-800 text-right">Total:</td>
-                      <td className="py-3 px-3 text-sm font-bold text-blue-600 text-right">{formatCurrency(totals.totalGross)}</td>
-                      <td className="py-3 px-3"></td>
-                      <td className="py-3 px-3"></td>
-                      <td className="py-3 px-3"></td>
-                      <td className="py-3 px-3"></td>
-                      <td className="py-3 px-3 text-sm font-bold text-green-600 text-right">{formatCurrency(totals.totalNetClinic)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-
           {/* Botões de ação */}
-          <div className="flex gap-3 sticky bottom-0 bg-white pt-4 border-t border-gray-200">
+          <div className="flex gap-3 sticky bottom-0 bg-white pt-4 border-t border-gray-200 print:hidden">
             <button
-              onClick={generatePDF}
+              onClick={handlePrint}
               className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 font-semibold"
             >
-              <Download size={20} />
-              Gerar PDF
+              <Printer size={20} />
+              Imprimir / Salvar como PDF
             </button>
             <button
               onClick={onClose}
               className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition flex items-center justify-center gap-2 font-semibold"
             >
-              <Printer size={20} />
               Fechar
             </button>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media print {
+          .fixed {
+            position: relative !important;
+            background: white !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:block {
+            display: block !important;
+          }
+          .print\\:grid-cols-4 {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          }
+          body {
+            padding: 20px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
