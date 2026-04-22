@@ -2,13 +2,11 @@
 // utils/clinicalCalculations.ts
 
 export const PROCEDURE_TYPES = [
-  { value: 'Consulta', label: 'Consulta', doctorPercentage: 20 },
-  { value: 'Retorno', label: 'Retorno', doctorPercentage: 20 },
-  { value: 'Pequena Cirurgia', label: 'Pequena Cirurgia', doctorPercentage: 30 },
-  { value: 'Média Cirurgia', label: 'Média Cirurgia', doctorPercentage: 35 },
-  { value: 'Grande Cirurgia', label: 'Grande Cirurgia', doctorPercentage: 40 },
-  { value: 'Exame', label: 'Exame', doctorPercentage: 15 },
-  { value: 'Curativo', label: 'Curativo', doctorPercentage: 10 },
+  { value: 'Consulta', label: 'Consulta', clinicPercentage: 20, doctorPercentage: 80 },
+  { value: 'Onda de Choque', label: 'Onda de Choque', clinicPercentage: 30, doctorPercentage: 70 },
+  { value: 'Infiltração', label: 'Infiltração', clinicPercentage: 40, doctorPercentage: 60 },
+  { value: 'Cirurgias', label: 'Cirurgias', clinicPercentage: 20, doctorPercentage: 80 },
+  { value: 'Médicos Terceiros', label: 'Médicos Terceiros', clinicPercentage: 50, doctorPercentage: 50 },
 ];
 
 export interface PaymentTaxRates {
@@ -29,9 +27,10 @@ export const getPaymentTaxRates = (): PaymentTaxRates => ({
 
 export interface FinancialPreview {
   grossValue: number;
+  clinicPercentage: number;
   doctorPercentage: number;
+  clinicAmount: number;
   doctorAmount: number;
-  clinicShareBeforeCosts: number;
   paymentTaxRate: number;
   paymentTaxAmount: number;
   invoiceTaxRate: number;
@@ -51,6 +50,7 @@ export interface FinancialPreview {
 
 export function calculateClinicalFinance(
   grossValue: number,
+  clinicPercentage: number,
   doctorPercentage: number,
   paymentMethod: string,
   paymentTaxRate: number,
@@ -62,19 +62,17 @@ export function calculateClinicalFinance(
   otherPaymentMethod?: string
 ): FinancialPreview {
   
-  // 1. Calcular valores base
+  // 1. Calcular valores base (distribuição justa)
+  const clinicAmount = (grossValue * clinicPercentage) / 100;
   const doctorAmount = (grossValue * doctorPercentage) / 100;
-  const clinicShareBeforeCosts = grossValue - doctorAmount;
   
-  // 2. Calcular taxas e custos
+  // 2. Calcular taxas e custos (impactam apenas a clínica)
   let effectiveTaxRate = paymentTaxRate;
-  let effectivePaymentMethod = paymentMethod;
   
   // Se for pagamento misto, usa a taxa do outro método (não dinheiro)
   if (cashAmount && cashAmount > 0 && cashAmount < grossValue && otherPaymentMethod) {
     const otherTaxRates = getPaymentTaxRates();
     effectiveTaxRate = otherTaxRates[otherPaymentMethod]?.defaultRate || 0;
-    effectivePaymentMethod = otherPaymentMethod;
   }
   
   const paymentTaxAmount = (grossValue * effectiveTaxRate) / 100;
@@ -82,7 +80,7 @@ export function calculateClinicalFinance(
   
   // 3. Total de deduções da clínica
   const totalDeductions = paymentTaxAmount + invoiceTaxAmount + medicationCost + suppliesCost + otherCosts;
-  let netClinicValue = clinicShareBeforeCosts - totalDeductions;
+  let netClinicValue = clinicAmount - totalDeductions;
   
   // 4. Lógica para pagamento em dinheiro (parcial ou total)
   let doctorImmediateCash = 0;
@@ -113,7 +111,6 @@ export function calculateClinicalFinance(
       clinicNetAfterCashAdjustment = netClinicValue + excessCash;
     } else if (cashAmountUsed < doctorAmount) {
       // Se o dinheiro não cobriu toda a parte do médico, a clínica ainda deve pagar a diferença
-      // Mas o dinheiro já está com o médico, então a clínica precisa descontar do seu lucro
       clinicNetAfterCashAdjustment = netClinicValue - (doctorAmount - cashAmountUsed);
     } else {
       // Valores iguais, sem ajuste adicional
@@ -126,9 +123,10 @@ export function calculateClinicalFinance(
   
   return {
     grossValue,
+    clinicPercentage,
     doctorPercentage,
+    clinicAmount,
     doctorAmount,
-    clinicShareBeforeCosts,
     paymentTaxRate: effectiveTaxRate,
     paymentTaxAmount,
     invoiceTaxRate,
