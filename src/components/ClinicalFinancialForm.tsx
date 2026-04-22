@@ -709,4 +709,142 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                       {formatCurrency(calculatePreview.doctorAmount)}
                     </p>
                     <p className="text-sm">
-                      <span className="font-semibold
+                      <span className="font-semibold text-green-700">Clínica ({clinicPercentage}%):</span>{' '}
+                      {formatCurrency(calculatePreview.clinicShareBeforeCosts)}
+                    </p>
+                  </div>
+                </div>
+
+                {(formData.isSplitPayment || formData.paymentMethod === 'cash') && (
+                  <div className="bg-green-50 p-3 rounded">
+                    <p className="text-sm font-semibold text-green-800 mb-2">💵 Ajuste por Pagamento em Dinheiro:</p>
+                    <div className="space-y-1 text-sm">
+                      <p>💰 Médico levou no ato: {formatCurrency(calculatePreview.cashAmountUsed)}</p>
+                      {calculatePreview.otherPaymentAmount > 0 && (
+                        <p>💳 Outro método: {formatCurrency(calculatePreview.otherPaymentAmount)}</p>
+                      )}
+                      {calculatePreview.doctorToReceiveLater > 0 && (
+                        <p>📋 Médico receberá depois: {formatCurrency(calculatePreview.doctorToReceiveLater)}</p>
+                      )}
+                      {calculatePreview.cashAmountUsed > calculatePreview.doctorAmount && (
+                        <p className="text-green-700">✨ Excedente para clínica: {formatCurrency(calculatePreview.cashAmountUsed - calculatePreview.doctorAmount)}</p>
+                      )}
+                      {calculatePreview.cashAmountUsed < calculatePreview.doctorAmount && (
+                        <p className="text-orange-700">⚠️ Clínica precisa repassar: {formatCurrency(calculatePreview.doctorAmount - calculatePreview.cashAmountUsed)}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(calculatePreview.paymentTaxAmount > 0 || calculatePreview.invoiceTaxAmount > 0 || 
+                  calculatePreview.medicationCost > 0 || calculatePreview.suppliesCost > 0 || calculatePreview.otherCosts > 0) && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Deduções da Clínica:</p>
+                    <div className="space-y-1 ml-4">
+                      {calculatePreview.paymentTaxAmount > 0 && (
+                        <p className="text-sm text-red-600">
+                          Taxa {formData.isSplitPayment ? 'do outro método' : 'do cartão'}: -{formatCurrency(calculatePreview.paymentTaxAmount)}
+                        </p>
+                      )}
+                      {calculatePreview.invoiceTaxAmount > 0 && (
+                        <p className="text-sm text-red-600">
+                          Impostos: -{formatCurrency(calculatePreview.invoiceTaxAmount)}
+                        </p>
+                      )}
+                      {calculatePreview.medicationCost > 0 && (
+                        <p className="text-sm text-orange-600">💊 Medicação: -{formatCurrency(calculatePreview.medicationCost)}</p>
+                      )}
+                      {calculatePreview.suppliesCost > 0 && (
+                        <p className="text-sm text-orange-600">📦 Insumos: -{formatCurrency(calculatePreview.suppliesCost)}</p>
+                      )}
+                      {calculatePreview.otherCosts > 0 && (
+                        <p className="text-sm text-orange-600">📋 Outros: -{formatCurrency(calculatePreview.otherCosts)}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-white rounded-lg p-4 shadow-inner">
+                <p className="text-sm text-gray-600 mb-1">Total de Deduções</p>
+                <p className="text-xl font-bold text-red-600 mb-3">
+                  -{formatCurrency(calculatePreview.totalDeductions)}
+                </p>
+                
+                <div className="border-t pt-3">
+                  <p className="text-sm text-green-600 font-semibold mb-1">
+                    Resultado LÍQUIDO para Clínica:
+                  </p>
+                  <p className="text-3xl font-bold text-green-700">
+                    {formatCurrency(calculatePreview.clinicNetAfterCashAdjustment)}
+                  </p>
+                  <div className="mt-2 p-2 bg-green-50 rounded">
+                    <p className="text-xs text-gray-600">
+                      Percentual efetivo sobre valor bruto: 
+                      <span className="font-bold text-green-700 ml-1">
+                        {calculatePreview.effectiveClinicPercentage.toFixed(1)}%
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-green-600 text-white py-3 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 font-semibold text-lg flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              Registrando...
+            </>
+          ) : (
+            <>
+              <CheckCircle size={20} />
+              Registrar (Apenas Gerencial)
+            </>
+          )}
+        </button>
+      </form>
+
+      {/* Modal de Sucesso */}
+      {showSuccessModal && lastPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800">Movimento Registrado!</h3>
+            </div>
+            
+            <div className="space-y-2 mb-4">
+              <p className="text-sm text-gray-600">
+                <strong>Valor bruto:</strong> {formatCurrency(lastPreview.grossValue)}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Líquido clínica:</strong> {formatCurrency(lastPreview.clinicNetAfterCashAdjustment)}
+              </p>
+              {getCashSettlementMessage() && (
+                <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                  {getCashSettlementMessage()}
+                </div>
+              )}
+            </div>
+            
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition-colors"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
