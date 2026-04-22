@@ -711,117 +711,126 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
         </div>
 
         {/* Preview do Cálculo */}
-        {calculatePreview && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
-            <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
-              <Calculator className="text-blue-600" />
-              Demonstrativo Financeiro (Gerencial)
-            </h3>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <div className="border-b border-blue-200 pb-2">
-                  <p className="text-sm text-gray-600">Valor Bruto</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(calculatePreview.grossValue)}
-                  </p>
-                </div>
-                
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Distribuição Base:</p>
-                  <div className="space-y-1 ml-4">
-                    <p className="text-sm">
-                      <span className="font-semibold text-green-700">Clínica ({calculatePreview.clinicPercentage}%):</span>{' '}
-                      <span className={getValueColorClass(calculatePreview.clinicAmount)}>
-                        {formatCurrency(calculatePreview.clinicAmount)}
-                      </span>
-                    </p>
-                    <p className="text-sm">
-                      <span className="font-semibold text-blue-700">Médico ({calculatePreview.doctorPercentage}%):</span>{' '}
-                      <span className={getValueColorClass(calculatePreview.doctorAmount)}>
-                        {formatCurrency(calculatePreview.doctorAmount)}
-                      </span>
-                    </p>
-                  </div>
-                </div>
+        {/* Preview do Cálculo */}
+{calculatePreview && (
+  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
+    <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+      <Calculator className="text-blue-600" />
+      Demonstrativo Financeiro (Gerencial)
+    </h3>
+    
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-3">
+        <div className="border-b border-blue-200 pb-2">
+          <p className="text-sm text-gray-600">Valor Bruto</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {formatCurrency(calculatePreview.grossValue)}
+          </p>
+        </div>
+        
+        <div>
+          <p className="text-sm text-gray-600 mb-2">Distribuição Base:</p>
+          <div className="space-y-1 ml-4">
+            <p className="text-sm">
+              <span className="font-semibold text-green-700">Clínica ({calculatePreview.clinicPercentage}%):</span>{' '}
+              <span className="text-green-600">
+                {formatCurrency(calculatePreview.clinicAmount)}
+              </span>
+            </p>
+            <p className="text-sm">
+              <span className="font-semibold text-blue-700">Médico ({calculatePreview.doctorPercentage}%):</span>{' '}
+              <span className="text-blue-600">
+                {formatCurrency(calculatePreview.doctorAmount)}
+              </span>
+            </p>
+          </div>
+        </div>
 
-                {(formData.isSplitPayment || formData.paymentMethod === 'cash') && (
-                  <div className={getValueBgColorClass(calculatePreview.clinicNetAfterCashAdjustment)} p-3 rounded>
-                    <p className="text-sm font-semibold mb-2">💵 Ajuste por Pagamento em Dinheiro:</p>
-                    <div className="space-y-1 text-sm">
-                      <p>💰 Médico levou no ato: {formatCurrency(calculatePreview.cashAmountUsed)}</p>
-                      {calculatePreview.otherPaymentAmount > 0 && (
-                        <p>💳 Outro método: {formatCurrency(calculatePreview.otherPaymentAmount)}</p>
-                      )}
-                      {calculatePreview.doctorToReceiveLater > 0 && (
-                        <p>📋 Médico receberá depois: {formatCurrency(calculatePreview.doctorToReceiveLater)}</p>
-                      )}
-                      {calculatePreview.cashAmountUsed > calculatePreview.doctorAmount && (
-                        <p className="text-green-700">✨ Excedente para clínica: {formatCurrency(calculatePreview.cashAmountUsed - calculatePreview.doctorAmount)}</p>
-                      )}
-                      {calculatePreview.cashAmountUsed < calculatePreview.doctorAmount && calculatePreview.cashAmountUsed > 0 && (
-                        <p className="text-orange-700">⚠️ Clínica precisa repassar: {formatCurrency(calculatePreview.doctorAmount - calculatePreview.cashAmountUsed)}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {(calculatePreview.paymentTaxAmount > 0 || calculatePreview.invoiceTaxAmount > 0 || 
-                  calculatePreview.medicationCost > 0 || calculatePreview.suppliesCost > 0 || calculatePreview.otherCosts > 0) && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-2">Deduções da Clínica:</p>
-                    <div className="space-y-1 ml-4">
-                      {calculatePreview.paymentTaxAmount > 0 && (
-                        <p className="text-sm text-red-600">
-                          Taxa {formData.isSplitPayment ? 'do outro método' : 'do cartão'}: -{formatCurrency(calculatePreview.paymentTaxAmount)}
-                        </p>
-                      )}
-                      {calculatePreview.invoiceTaxAmount > 0 && (
-                        <p className="text-sm text-red-600">
-                          Impostos: -{formatCurrency(calculatePreview.invoiceTaxAmount)}
-                        </p>
-                      )}
-                      {calculatePreview.medicationCost > 0 && (
-                        <p className="text-sm text-orange-600">💊 Medicação: -{formatCurrency(calculatePreview.medicationCost)}</p>
-                      )}
-                      {calculatePreview.suppliesCost > 0 && (
-                        <p className="text-sm text-orange-600">📦 Insumos: -{formatCurrency(calculatePreview.suppliesCost)}</p>
-                      )}
-                      {calculatePreview.otherCosts > 0 && (
-                        <p className="text-sm text-orange-600">📋 Outros: -{formatCurrency(calculatePreview.otherCosts)}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div className={`${getValueBgColorClass(calculatePreview.clinicNetAfterCashAdjustment)} rounded-lg p-4 shadow-inner`}>
-                <p className="text-sm text-gray-600 mb-1">Total de Deduções</p>
-                <p className="text-xl font-bold text-red-600 mb-3">
-                  -{formatCurrency(calculatePreview.totalDeductions)}
-                </p>
-                
-                <div className="border-t pt-3">
-                  <p className="text-sm font-semibold mb-1">
-                    Resultado LÍQUIDO para Clínica:
-                  </p>
-                  <p className={`text-3xl font-bold ${getValueColorClass(calculatePreview.clinicNetAfterCashAdjustment)}`}>
-                    {calculatePreview.clinicNetAfterCashAdjustment < 0 && '-'}
-                    {formatCurrency(Math.abs(calculatePreview.clinicNetAfterCashAdjustment))}
-                  </p>
-                  <div className="mt-2 p-2 bg-white bg-opacity-50 rounded">
-                    <p className="text-xs text-gray-600">
-                      Percentual efetivo sobre valor bruto: 
-                      <span className={`font-bold ml-1 ${getValueColorClass(calculatePreview.effectiveClinicPercentage)}`}>
-                        {calculatePreview.effectiveClinicPercentage.toFixed(1)}%
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
+        {(formData.isSplitPayment || formData.paymentMethod === 'cash') && (
+          <div className="bg-blue-50 p-3 rounded">
+            <p className="text-sm font-semibold text-blue-800 mb-2">💵 Ajuste por Pagamento em Dinheiro:</p>
+            <div className="space-y-1 text-sm">
+              <p>💰 Médico levou no ato: {formatCurrency(calculatePreview.cashAmountUsed)}</p>
+              {calculatePreview.otherPaymentAmount > 0 && (
+                <p>💳 Outro método: {formatCurrency(calculatePreview.otherPaymentAmount)}</p>
+              )}
+              {calculatePreview.doctorToReceiveLater > 0 && (
+                <p>📋 Médico receberá depois: {formatCurrency(calculatePreview.doctorToReceiveLater)}</p>
+              )}
+              {calculatePreview.cashAmountUsed > calculatePreview.doctorAmount && (
+                <p className="text-green-700">✨ Excedente para clínica: {formatCurrency(calculatePreview.cashAmountUsed - calculatePreview.doctorAmount)}</p>
+              )}
+              {calculatePreview.cashAmountUsed < calculatePreview.doctorAmount && calculatePreview.cashAmountUsed > 0 && (
+                <p className="text-orange-700">⚠️ Clínica precisa repassar: {formatCurrency(calculatePreview.doctorAmount - calculatePreview.cashAmountUsed)}</p>
+              )}
             </div>
           </div>
         )}
+
+        {(calculatePreview.paymentTaxAmount > 0 || calculatePreview.invoiceTaxAmount > 0 || 
+          calculatePreview.medicationCost > 0 || calculatePreview.suppliesCost > 0 || calculatePreview.otherCosts > 0) && (
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Deduções da Clínica:</p>
+            <div className="space-y-1 ml-4">
+              {calculatePreview.paymentTaxAmount > 0 && (
+                <p className="text-sm text-red-600">
+                  Taxa {formData.isSplitPayment ? 'do outro método' : 'do cartão'}: -{formatCurrency(calculatePreview.paymentTaxAmount)}
+                </p>
+              )}
+              {calculatePreview.invoiceTaxAmount > 0 && (
+                <p className="text-sm text-red-600">
+                  Impostos: -{formatCurrency(calculatePreview.invoiceTaxAmount)}
+                </p>
+              )}
+              {calculatePreview.medicationCost > 0 && (
+                <p className="text-sm text-orange-600">💊 Medicação: -{formatCurrency(calculatePreview.medicationCost)}</p>
+              )}
+              {calculatePreview.suppliesCost > 0 && (
+                <p className="text-sm text-orange-600">📦 Insumos: -{formatCurrency(calculatePreview.suppliesCost)}</p>
+              )}
+              {calculatePreview.otherCosts > 0 && (
+                <p className="text-sm text-orange-600">📋 Outros: -{formatCurrency(calculatePreview.otherCosts)}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* CARDO DIREITO - ONDE ESTÁ O PROBLEMA */}
+      <div className={`rounded-lg p-4 shadow-inner ${
+        calculatePreview.clinicNetAfterCashAdjustment < 0 ? 'bg-red-100' : 'bg-green-100'
+      }`}>
+        <p className="text-sm text-gray-600 mb-1">Total de Deduções</p>
+        <p className="text-xl font-bold text-red-600 mb-3">
+          -{formatCurrency(calculatePreview.totalDeductions)}
+        </p>
+        
+        <div className="border-t pt-3">
+          <p className="text-sm font-semibold mb-1">
+            Resultado LÍQUIDO para Clínica:
+          </p>
+          {/* CORREÇÃO AQUI: Verificar sinal e aplicar cor correta */}
+          <p className={`text-3xl font-bold ${
+            calculatePreview.clinicNetAfterCashAdjustment < 0 ? 'text-red-600' : 'text-green-600'
+          }`}>
+            {calculatePreview.clinicNetAfterCashAdjustment < 0 && '-'}
+            {formatCurrency(Math.abs(calculatePreview.clinicNetAfterCashAdjustment))}
+          </p>
+          <div className="mt-2 p-2 bg-white bg-opacity-50 rounded">
+            <p className="text-xs text-gray-600">
+              Percentual efetivo sobre valor bruto: 
+              <span className={`font-bold ml-1 ${
+                calculatePreview.effectiveClinicPercentage < 0 ? 'text-red-600' : 'text-green-600'
+              }`}>
+                {calculatePreview.effectiveClinicPercentage.toFixed(1)}%
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         <button
           type="submit"
