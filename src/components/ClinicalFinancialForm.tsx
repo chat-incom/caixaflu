@@ -81,6 +81,26 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
   
   const paymentTaxRates = getPaymentTaxRates();
 
+  // Função para obter classe CSS baseada no valor
+  const getValueColorClass = (value: number): string => {
+    if (value < 0) return 'text-red-600';
+    if (value === 0) return 'text-gray-600';
+    return 'text-green-600';
+  };
+
+  // Função para obter classe CSS do fundo baseada no valor
+  const getValueBgColorClass = (value: number): string => {
+    if (value < 0) return 'bg-red-50';
+    if (value === 0) return 'bg-gray-50';
+    return 'bg-green-50';
+  };
+
+  // Função para obter classe do texto para deduções
+  const getDeductionColorClass = (value: number): string => {
+    if (value > 0) return 'text-red-600';
+    return 'text-gray-500';
+  };
+
   const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
@@ -712,18 +732,22 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                   <div className="space-y-1 ml-4">
                     <p className="text-sm">
                       <span className="font-semibold text-green-700">Clínica ({calculatePreview.clinicPercentage}%):</span>{' '}
-                      {formatCurrency(calculatePreview.clinicAmount)}
+                      <span className={getValueColorClass(calculatePreview.clinicAmount)}>
+                        {formatCurrency(calculatePreview.clinicAmount)}
+                      </span>
                     </p>
                     <p className="text-sm">
                       <span className="font-semibold text-blue-700">Médico ({calculatePreview.doctorPercentage}%):</span>{' '}
-                      {formatCurrency(calculatePreview.doctorAmount)}
+                      <span className={getValueColorClass(calculatePreview.doctorAmount)}>
+                        {formatCurrency(calculatePreview.doctorAmount)}
+                      </span>
                     </p>
                   </div>
                 </div>
 
                 {(formData.isSplitPayment || formData.paymentMethod === 'cash') && (
-                  <div className="bg-green-50 p-3 rounded">
-                    <p className="text-sm font-semibold text-green-800 mb-2">💵 Ajuste por Pagamento em Dinheiro:</p>
+                  <div className={getValueBgColorClass(calculatePreview.clinicNetAfterCashAdjustment)} p-3 rounded>
+                    <p className="text-sm font-semibold mb-2">💵 Ajuste por Pagamento em Dinheiro:</p>
                     <div className="space-y-1 text-sm">
                       <p>💰 Médico levou no ato: {formatCurrency(calculatePreview.cashAmountUsed)}</p>
                       {calculatePreview.otherPaymentAmount > 0 && (
@@ -771,23 +795,24 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                 )}
               </div>
               
-              <div className="bg-white rounded-lg p-4 shadow-inner">
+              <div className={`${getValueBgColorClass(calculatePreview.clinicNetAfterCashAdjustment)} rounded-lg p-4 shadow-inner`}>
                 <p className="text-sm text-gray-600 mb-1">Total de Deduções</p>
                 <p className="text-xl font-bold text-red-600 mb-3">
                   -{formatCurrency(calculatePreview.totalDeductions)}
                 </p>
                 
                 <div className="border-t pt-3">
-                  <p className="text-sm text-green-600 font-semibold mb-1">
+                  <p className="text-sm font-semibold mb-1">
                     Resultado LÍQUIDO para Clínica:
                   </p>
-                  <p className="text-3xl font-bold text-green-700">
-                    {formatCurrency(calculatePreview.clinicNetAfterCashAdjustment)}
+                  <p className={`text-3xl font-bold ${getValueColorClass(calculatePreview.clinicNetAfterCashAdjustment)}`}>
+                    {calculatePreview.clinicNetAfterCashAdjustment < 0 && '-'}
+                    {formatCurrency(Math.abs(calculatePreview.clinicNetAfterCashAdjustment))}
                   </p>
-                  <div className="mt-2 p-2 bg-green-50 rounded">
+                  <div className="mt-2 p-2 bg-white bg-opacity-50 rounded">
                     <p className="text-xs text-gray-600">
                       Percentual efetivo sobre valor bruto: 
-                      <span className="font-bold text-green-700 ml-1">
+                      <span className={`font-bold ml-1 ${getValueColorClass(calculatePreview.effectiveClinicPercentage)}`}>
                         {calculatePreview.effectiveClinicPercentage.toFixed(1)}%
                       </span>
                     </p>
@@ -845,11 +870,15 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Clínica ({lastPreview.clinicPercentage}%)</p>
-                  <p className="text-lg font-semibold text-green-600">{formatCurrency(lastPreview.clinicAmount)}</p>
+                  <p className={`text-lg font-semibold ${getValueColorClass(lastPreview.clinicAmount)}`}>
+                    {formatCurrency(Math.abs(lastPreview.clinicAmount))}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Médico ({lastPreview.doctorPercentage}%)</p>
-                  <p className="text-lg font-semibold text-blue-600">{formatCurrency(lastPreview.doctorAmount)}</p>
+                  <p className={`text-lg font-semibold ${getValueColorClass(lastPreview.doctorAmount)}`}>
+                    {formatCurrency(lastPreview.doctorAmount)}
+                  </p>
                 </div>
               </div>
               
@@ -870,9 +899,12 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                 </div>
               )}
               
-              <div className="bg-gray-50 p-3 rounded">
+              <div className={`${getValueBgColorClass(lastPreview.clinicNetAfterCashAdjustment)} p-3 rounded`}>
                 <p className="text-sm text-gray-500">Líquido Final Clínica</p>
-                <p className="text-2xl font-bold text-green-700">{formatCurrency(lastPreview.clinicNetAfterCashAdjustment)}</p>
+                <p className={`text-2xl font-bold ${getValueColorClass(lastPreview.clinicNetAfterCashAdjustment)}`}>
+                  {lastPreview.clinicNetAfterCashAdjustment < 0 && '-'}
+                  {formatCurrency(Math.abs(lastPreview.clinicNetAfterCashAdjustment))}
+                </p>
               </div>
             </div>
             
