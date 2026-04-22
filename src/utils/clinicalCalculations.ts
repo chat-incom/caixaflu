@@ -1,4 +1,3 @@
-
 // utils/clinicalCalculations.ts
 
 export const PROCEDURE_TYPES = [
@@ -118,8 +117,8 @@ export function calculateClinicalFinance(
     }
   }
   
-  // Garantir que não fique negativo
-  clinicNetAfterCashAdjustment = Math.max(0, clinicNetAfterCashAdjustment);
+  // Garantir que não fique negativo (apenas para exibição, o valor real pode ser negativo)
+  // Removemos o Math.max para permitir valores negativos
   
   return {
     grossValue,
@@ -149,5 +148,5 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(value);
+  }).format(Math.abs(value));
 }
