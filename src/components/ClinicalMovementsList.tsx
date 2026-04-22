@@ -25,11 +25,17 @@ export default function ClinicalMovementsList({ refreshTrigger }: { refreshTrigg
   const [loading, setLoading] = useState(true);
 
   // Função para obter classe CSS baseada no valor
-  const getValueColorClass = (value: number): string => {
-    if (value < 0) return 'text-red-600';
-    if (value === 0) return 'text-gray-500';
-    return 'text-green-600';
-  };
+ // Funções de cor CORRETAS
+const getValueColorClass = (value: number): string => {
+  // NEGATIVO = VERMELHO
+  if (value < 0) return 'text-red-600 font-bold';
+  // ZERO = CINZA
+  if (value === 0) return 'text-gray-500';
+  // POSITIVO = VERDE
+  return 'text-green-600 font-bold';
+};
+
+
 
   // Função para obter classe do fundo da linha
   const getRowBgClass = (value: number): string => {
@@ -177,15 +183,27 @@ export default function ClinicalMovementsList({ refreshTrigger }: { refreshTrigg
                     <td className="py-3 px-2 text-sm text-orange-600 text-right">
                       -{formatCurrency(totalCosts)}
                     </td>
-                    <td className="py-3 px-2 text-sm font-bold text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {getValueIcon(mov.net_clinic_value)}
-                        <span className={getValueColorClass(mov.net_clinic_value)}>
-                          {mov.net_clinic_value < 0 && '-'}
-                          {formatCurrency(mov.net_clinic_value)}
-                        </span>
-                      </div>
-                    </td>
+                   // Funções de cor CORRETAS
+const getValueColorClass = (value: number): string => {
+  // NEGATIVO = VERMELHO
+  if (value < 0) return 'text-red-600 font-bold';
+  // ZERO = CINZA
+  if (value === 0) return 'text-gray-500';
+  // POSITIVO = VERDE
+  return 'text-green-600 font-bold';
+};
+
+// Na coluna do Líquido Clínica na tabela
+<td className="py-3 px-2 text-sm font-bold text-right">
+  <div className="flex items-center justify-end gap-1">
+    {mov.net_clinic_value < 0 && <TrendingDown className="text-red-500" size={14} />}
+    {mov.net_clinic_value > 0 && <TrendingUp className="text-green-500" size={14} />}
+    <span className={getValueColorClass(mov.net_clinic_value)}>
+      {mov.net_clinic_value < 0 && '-'}
+      {formatCurrency(Math.abs(mov.net_clinic_value))}
+    </span>
+  </div>
+</td>
                   </tr>
                 );
               })}
