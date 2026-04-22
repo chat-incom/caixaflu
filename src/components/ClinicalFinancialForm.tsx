@@ -4,15 +4,13 @@ import { useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Calculator, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
   Pill, 
   Package, 
   CreditCard, 
   Banknote,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  X
 } from 'lucide-react';
 import { 
   calculateClinicalFinance, 
@@ -98,8 +96,11 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
     }
   };
 
+  const procedure = PROCEDURE_TYPES.find(p => p.value === formData.procedureType);
+  const clinicPercentage = procedure ? procedure.clinicPercentage : 0;
+  const doctorPercentage = procedure ? procedure.doctorPercentage : 0;
+
   const calculatePreview = useMemo(() => {
-    const procedure = PROCEDURE_TYPES.find(p => p.value === formData.procedureType);
     if (!procedure || !formData.grossValue) return null;
 
     const grossValueNum = parseFloat(formData.grossValue);
@@ -123,7 +124,8 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
 
     return calculateClinicalFinance(
       grossValueNum,
-      procedure.doctorPercentage,
+      clinicPercentage,
+      doctorPercentage,
       effectivePaymentMethod,
       effectiveTaxRate,
       formData.invoiceTaxRate,
@@ -134,7 +136,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       otherMethod
     );
   }, [
-    formData.procedureType,
+    procedure,
     formData.grossValue,
     formData.paymentMethod,
     formData.paymentTaxRate,
@@ -145,7 +147,9 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
     formData.isSplitPayment,
     formData.cashAmount,
     formData.otherPaymentMethod,
-    formData.otherPaymentTaxRate
+    formData.otherPaymentTaxRate,
+    clinicPercentage,
+    doctorPercentage
   ]);
 
   const validateFormData = (): { isValid: boolean; errors: string[] } => {
@@ -168,7 +172,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
     // Validação de pagamento misto
     if (formData.isSplitPayment && formData.cashAmount) {
       const cashAmountNum = parseFloat(formData.cashAmount);
-      const otherAmountNum = grossValueNum - cashAmountNum;
+      const grossValueNum = parseFloat(formData.grossValue);
       
       if (isNaN(cashAmountNum) || cashAmountNum <= 0) {
         errors.push('Valor em dinheiro deve ser maior que zero');
@@ -176,10 +180,6 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       
       if (cashAmountNum > grossValueNum) {
         errors.push('Valor em dinheiro não pode ser maior que o valor total');
-      }
-      
-      if (otherAmountNum < 0) {
-        errors.push('Valor da outra forma de pagamento não pode ser negativo');
       }
       
       if (cashAmountNum === grossValueNum) {
@@ -271,7 +271,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
           gross_value: calculatePreview.grossValue,
           doctor_percentage: calculatePreview.doctorPercentage,
           doctor_amount: calculatePreview.doctorAmount,
-          clinic_share_before_costs: calculatePreview.clinicShareBeforeCosts,
+          clinic_share_before_costs: calculatePreview.clinicAmount,
           payment_method: mappedPaymentMethod,
           payment_tax_rate: finalTaxRate,
           payment_tax_amount: calculatePreview.paymentTaxAmount,
@@ -317,27 +317,33 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
   };
 
   const getCashSettlementMessage = () => {
-    if (!calculatePreview) return '';
+    if (!lastPreview) return '';
     
     const hasCash = formData.paymentMethod === 'cash' || formData.isSplitPayment;
     if (!hasCash || formData.cashSettlementType !== 'doctor_took') return '';
     
-    let message = `💰 Médico levou em dinheiro: ${formatCurrency(calculatePreview.cashAmountUsed)}\n`;
+    let message = '';
     
-    if (calculatePreview.doctorToReceiveLater > 0) {
-      message += `📋 Médico receberá depois: ${formatCurrency(calculatePreview.doctorToReceiveLater)}\n`;
+    if (lastPreview.cashAmountUsed > 0) {
+      message += `💰 Médico levou em dinheiro: ${formatCurrency(lastPreview.cashAmountUsed)}\n`;
     }
     
-    if (calculatePreview.cashAmountUsed > calculatePreview.doctorAmount) {
-      const excess = calculatePreview.cashAmountUsed - calculatePreview.doctorAmount;
+    if (lastPreview.doctorToReceiveLater > 0) {
+      message += `📋 Médico receberá depois: ${formatCurrency(lastPreview.doctorToReceiveLater)}\n`;
+    }
+    
+    if (lastPreview.cashAmountUsed > lastPreview.doctorAmount) {
+      const excess = lastPreview.cashAmountUsed - lastPreview.doctorAmount;
       message += `✨ Excedente para clínica: ${formatCurrency(excess)}\n`;
+    }
+    
+    if (lastPreview.cashAmountUsed < lastPreview.doctorAmount && lastPreview.cashAmountUsed > 0) {
+      const deficit = lastPreview.doctorAmount - lastPreview.cashAmountUsed;
+      message += `⚠️ Clínica precisa repassar: ${formatCurrency(deficit)}\n`;
     }
     
     return message;
   };
-
-  const procedure = PROCEDURE_TYPES.find(p => p.value === formData.procedureType);
-  const clinicPercentage = procedure ? 100 - procedure.doctorPercentage : 0;
 
   return (
     <>
@@ -414,7 +420,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
             >
               {PROCEDURE_TYPES.map(p => (
                 <option key={p.value} value={p.value}>
-                  {p.label} - {p.doctorPercentage}% médico / {100 - p.doctorPercentage}% clínica
+                  {p.label} - {p.clinicPercentage}% clínica / {p.doctorPercentage}% médico
                 </option>
               ))}
             </select>
@@ -705,12 +711,12 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                   <p className="text-sm text-gray-600 mb-2">Distribuição Base:</p>
                   <div className="space-y-1 ml-4">
                     <p className="text-sm">
-                      <span className="font-semibold text-blue-700">Médico ({calculatePreview.doctorPercentage}%):</span>{' '}
-                      {formatCurrency(calculatePreview.doctorAmount)}
+                      <span className="font-semibold text-green-700">Clínica ({calculatePreview.clinicPercentage}%):</span>{' '}
+                      {formatCurrency(calculatePreview.clinicAmount)}
                     </p>
                     <p className="text-sm">
-                      <span className="font-semibold text-green-700">Clínica ({clinicPercentage}%):</span>{' '}
-                      {formatCurrency(calculatePreview.clinicShareBeforeCosts)}
+                      <span className="font-semibold text-blue-700">Médico ({calculatePreview.doctorPercentage}%):</span>{' '}
+                      {formatCurrency(calculatePreview.doctorAmount)}
                     </p>
                   </div>
                 </div>
@@ -729,7 +735,7 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
                       {calculatePreview.cashAmountUsed > calculatePreview.doctorAmount && (
                         <p className="text-green-700">✨ Excedente para clínica: {formatCurrency(calculatePreview.cashAmountUsed - calculatePreview.doctorAmount)}</p>
                       )}
-                      {calculatePreview.cashAmountUsed < calculatePreview.doctorAmount && (
+                      {calculatePreview.cashAmountUsed < calculatePreview.doctorAmount && calculatePreview.cashAmountUsed > 0 && (
                         <p className="text-orange-700">⚠️ Clínica precisa repassar: {formatCurrency(calculatePreview.doctorAmount - calculatePreview.cashAmountUsed)}</p>
                       )}
                     </div>
@@ -815,25 +821,59 @@ export default function ClinicalFinancialForm({ onSuccess }: { onSuccess: () => 
       {showSuccessModal && lastPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={24} />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="text-green-600" size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800">Movimento Registrado!</h3>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">Movimento Registrado!</h3>
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
             </div>
             
-            <div className="space-y-2 mb-4">
-              <p className="text-sm text-gray-600">
-                <strong>Valor bruto:</strong> {formatCurrency(lastPreview.grossValue)}
-              </p>
-              <p className="text-sm text-gray-600">
-                <strong>Líquido clínica:</strong> {formatCurrency(lastPreview.clinicNetAfterCashAdjustment)}
-              </p>
-              {getCashSettlementMessage() && (
-                <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                  {getCashSettlementMessage()}
+            <div className="space-y-3 mb-6">
+              <div className="border-b pb-2">
+                <p className="text-sm text-gray-500">Valor Bruto</p>
+                <p className="text-lg font-bold text-gray-800">{formatCurrency(lastPreview.grossValue)}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Clínica ({lastPreview.clinicPercentage}%)</p>
+                  <p className="text-lg font-semibold text-green-600">{formatCurrency(lastPreview.clinicAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Médico ({lastPreview.doctorPercentage}%)</p>
+                  <p className="text-lg font-semibold text-blue-600">{formatCurrency(lastPreview.doctorAmount)}</p>
+                </div>
+              </div>
+              
+              {(formData.paymentMethod === 'cash' || formData.isSplitPayment) && formData.cashSettlementType === 'doctor_took' && (
+                <div className="bg-blue-50 p-3 rounded">
+                  <p className="text-sm font-semibold text-blue-800 mb-2">💰 Acerto com Médico</p>
+                  <div className="space-y-1 text-sm">
+                    {lastPreview.cashAmountUsed > 0 && (
+                      <p>💵 Levou no ato: {formatCurrency(lastPreview.cashAmountUsed)}</p>
+                    )}
+                    {lastPreview.doctorToReceiveLater > 0 && (
+                      <p>📋 Receberá depois: {formatCurrency(lastPreview.doctorToReceiveLater)}</p>
+                    )}
+                    {lastPreview.cashAmountUsed > lastPreview.doctorAmount && (
+                      <p className="text-green-700">✨ Excedente clínica: {formatCurrency(lastPreview.cashAmountUsed - lastPreview.doctorAmount)}</p>
+                    )}
+                  </div>
                 </div>
               )}
+              
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm text-gray-500">Líquido Final Clínica</p>
+                <p className="text-2xl font-bold text-green-700">{formatCurrency(lastPreview.clinicNetAfterCashAdjustment)}</p>
+              </div>
             </div>
             
             <button
