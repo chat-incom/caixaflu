@@ -1,28 +1,4 @@
-// utils/clinicalCalculations.ts
-
-export const PROCEDURE_TYPES = [
-  { value: 'Consulta', label: 'Consulta', clinicPercentage: 20, doctorPercentage: 80 },
-  { value: 'Onda de Choque', label: 'Onda de Choque', clinicPercentage: 30, doctorPercentage: 70 },
-  { value: 'Infiltração', label: 'Infiltração', clinicPercentage: 40, doctorPercentage: 60 },
-  { value: 'Cirurgias', label: 'Cirurgias', clinicPercentage: 20, doctorPercentage: 80 },
-  { value: 'Médicos Terceiros', label: 'Médicos Terceiros', clinicPercentage: 50, doctorPercentage: 50 },
-];
-
-export interface PaymentTaxRates {
-  [key: string]: {
-    label: string;
-    defaultRate: number;
-    rates: number[];
-  };
-}
-
-export const getPaymentTaxRates = (): PaymentTaxRates => ({
-  credit: { label: 'Cartão de Crédito', defaultRate: 3.5, rates: [2.5, 3.0, 3.5, 4.0, 4.5] },
-  debit: { label: 'Cartão de Débito', defaultRate: 1.5, rates: [1.0, 1.5, 2.0, 2.5] },
-  pix: { label: 'PIX', defaultRate: 0, rates: [0] },
-  cash: { label: 'Dinheiro', defaultRate: 0, rates: [0] },
-  deposit: { label: 'Depósito/Transferência', defaultRate: 0, rates: [0] },
-});
+import { PROCEDURE_TYPES, getPaymentTaxRates } from './constants';
 
 export interface FinancialPreview {
   grossValue: number;
@@ -39,12 +15,12 @@ export interface FinancialPreview {
   otherCosts: number;
   totalDeductions: number;
   netClinicValue: number;
-  effectiveClinicPercentage: number;
-  doctorImmediateCash: number;
-  doctorToReceiveLater: number;
+  cashTakenByDoctor: number;
+  doctorBalanceToReceive: number;
+  clinicCashAdjustment: number;
   clinicNetAfterCashAdjustment: number;
-  cashAmountUsed: number;
-  otherPaymentAmount: number;
+  originalClinicPercentage: number;
+  adjustedClinicPercentage: number;
 }
 
 export function calculateClinicalFinance(
@@ -61,15 +37,29 @@ export function calculateClinicalFinance(
   otherPaymentMethod?: string
 ): FinancialPreview {
   
-  // 1. Calcular valores base (distribuição justa)
+  // Validações
+  if (grossValue <= 0) {
+    throw new Error('Valor bruto deve ser maior que zero');
+  }
+  if (clinicPercentage + doctorPercentage !== 100) {
+    throw new Error('Percentuais da clínica e médico devem somar 100%');
+  }
+  if (paymentTaxRate < 0 || paymentTaxRate > 100) {
+    throw new Error('Taxa de pagamento deve estar entre 0 e 100%');
+  }
+  if (invoiceTaxRate < 0 || invoiceTaxRate > 100) {
+    throw new Error('Taxa de imposto deve estar entre 0 e 100%');
+  }
+  
+  // 1. Distribuição base
   const clinicAmount = (grossValue * clinicPercentage) / 100;
   const doctorAmount = (grossValue * doctorPercentage) / 100;
   
-  // 2. Calcular taxas e custos (impactam apenas a clínica)
+  // 2. Taxas e custos
   let effectiveTaxRate = paymentTaxRate;
+  const hasSplitPayment = cashAmount && cashAmount > 0 && cashAmount < grossValue;
   
-  // Se for pagamento misto, usa a taxa do outro método (não dinheiro)
-  if (cashAmount && cashAmount > 0 && cashAmount < grossValue && otherPaymentMethod) {
+  if (hasSplitPayment && otherPaymentMethod && paymentTaxRate === 0) {
     const otherTaxRates = getPaymentTaxRates();
     effectiveTaxRate = otherTaxRates[otherPaymentMethod]?.defaultRate || 0;
   }
@@ -77,48 +67,37 @@ export function calculateClinicalFinance(
   const paymentTaxAmount = (grossValue * effectiveTaxRate) / 100;
   const invoiceTaxAmount = (grossValue * invoiceTaxRate) / 100;
   
-  // 3. Total de deduções da clínica
+  // 3. Total de deduções e resultado líquido inicial
   const totalDeductions = paymentTaxAmount + invoiceTaxAmount + medicationCost + suppliesCost + otherCosts;
-  let netClinicValue = clinicAmount - totalDeductions;
+  const netClinicValue = clinicAmount - totalDeductions;
   
-  // 4. Lógica para pagamento em dinheiro (parcial ou total)
-  let doctorImmediateCash = 0;
-  let doctorToReceiveLater = doctorAmount;
+  // 4. Ajustes para pagamento em dinheiro
+  let cashTakenByDoctor = 0;
+  let doctorBalanceToReceive = doctorAmount;
+  let clinicCashAdjustment = 0;
   let clinicNetAfterCashAdjustment = netClinicValue;
-  let cashAmountUsed = 0;
-  let otherPaymentAmount = grossValue;
   
-  // Verifica se há pagamento em dinheiro
   const hasCashPayment = paymentMethod === 'cash' || (cashAmount && cashAmount > 0);
   
   if (hasCashPayment) {
-    // Determina o valor em dinheiro recebido
-    cashAmountUsed = cashAmount && cashAmount > 0 ? cashAmount : grossValue;
-    otherPaymentAmount = grossValue - cashAmountUsed;
+    const cashAmountUsed = cashAmount && cashAmount > 0 ? cashAmount : grossValue;
+    cashTakenByDoctor = cashAmountUsed;
     
-    // O médico levou o dinheiro (consideramos que sim quando é dinheiro)
-    doctorImmediateCash = cashAmountUsed;
-    
-    // Calcula quanto da parte do médico já foi paga com o dinheiro
     const doctorPaidFromCash = Math.min(cashAmountUsed, doctorAmount);
-    doctorToReceiveLater = doctorAmount - doctorPaidFromCash;
+    doctorBalanceToReceive = doctorAmount - doctorPaidFromCash;
     
-    // Ajusta o valor líquido da clínica baseado no dinheiro recebido
     if (cashAmountUsed > doctorAmount) {
-      // Se o dinheiro recebido é MAIOR que a parte do médico, o excedente é da clínica
-      const excessCash = cashAmountUsed - doctorAmount;
-      clinicNetAfterCashAdjustment = netClinicValue + excessCash;
+      clinicCashAdjustment = cashAmountUsed - doctorAmount;
+      clinicNetAfterCashAdjustment = netClinicValue + clinicCashAdjustment;
     } else if (cashAmountUsed < doctorAmount) {
-      // Se o dinheiro não cobriu toda a parte do médico, a clínica ainda deve pagar a diferença
-      clinicNetAfterCashAdjustment = netClinicValue - (doctorAmount - cashAmountUsed);
-    } else {
-      // Valores iguais, sem ajuste adicional
-      clinicNetAfterCashAdjustment = netClinicValue;
+      clinicCashAdjustment = -(doctorAmount - cashAmountUsed);
+      clinicNetAfterCashAdjustment = netClinicValue + clinicCashAdjustment;
     }
   }
   
-  // Garantir que não fique negativo (apenas para exibição, o valor real pode ser negativo)
-  // Removemos o Math.max para permitir valores negativos
+  // 5. Percentuais efetivos
+  const originalClinicPercentage = grossValue > 0 ? (netClinicValue / grossValue) * 100 : 0;
+  const adjustedClinicPercentage = grossValue > 0 ? (clinicNetAfterCashAdjustment / grossValue) * 100 : 0;
   
   return {
     grossValue,
@@ -135,18 +114,23 @@ export function calculateClinicalFinance(
     otherCosts,
     totalDeductions,
     netClinicValue,
-    effectiveClinicPercentage: (clinicNetAfterCashAdjustment / grossValue) * 100,
-    doctorImmediateCash,
-    doctorToReceiveLater,
+    cashTakenByDoctor,
+    doctorBalanceToReceive,
+    clinicCashAdjustment,
     clinicNetAfterCashAdjustment,
-    cashAmountUsed,
-    otherPaymentAmount
+    originalClinicPercentage,
+    adjustedClinicPercentage
   };
 }
 
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(Math.abs(value));
-}
+export const calculateTotalDeductions = (movement: any): number => {
+  return (movement.payment_tax_amount || 0) + 
+         (movement.invoice_tax_amount || 0) + 
+         (movement.medication_cost || 0) + 
+         (movement.supplies_cost || 0) + 
+         (movement.other_costs || 0);
+};
+
+export const findProcedureByValue = (value: string) => {
+  return PROCEDURE_TYPES.find(p => p.value === value);
+};
