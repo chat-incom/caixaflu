@@ -1,6 +1,6 @@
-// src/contexts/AuthContext.tsx (VERSÃO SEM CACHE - MAIS SEGURA)
+// src/contexts/AuthContext.tsx (VERSÃO EXTREMAMENTE SIMPLES)
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -17,64 +17,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const isMounted = useRef(true);
-  const isUpdating = useRef(false);
-
-  const fetchUser = useCallback(async () => {
-    if (!isMounted.current || isUpdating.current) return;
-    
-    isUpdating.current = true;
-    
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (isMounted.current) {
-        setUser(session?.user ?? null);
-      }
-    } catch (error) {
-      console.error('Erro ao buscar sessão:', error);
-      if (isMounted.current) {
-        setUser(null);
-      }
-    } finally {
-      if (isMounted.current) {
-        setLoading(false);
-      }
-      isUpdating.current = false;
-    }
-  }, []);
 
   useEffect(() => {
-    isMounted.current = true;
-    fetchUser();
-
-    let refreshTimeout: NodeJS.Timeout;
-    
-    // ✅ Listener de autenticação sem cache
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
-      
-      // ✅ Ignorar token refresh para não recarregar a página
-      if (event === 'TOKEN_REFRESHED') {
-        // Não fazer nada - apenas ignorar
-        return;
-      }
-      
-      // ✅ Debounce para evitar múltiplas atualizações
-      clearTimeout(refreshTimeout);
-      refreshTimeout = setTimeout(() => {
-        if (isMounted.current) {
-          setUser(session?.user ?? null);
-        }
-      }, 100);
+    // ✅ Apenas buscar sessão uma vez no início
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
-    return () => {
-      isMounted.current = false;
-      subscription.unsubscribe();
-      clearTimeout(refreshTimeout);
-    };
-  }, [fetchUser]);
+    // ✅ SEM listener de onAuthStateChange - isso previne refresh!
+    // O usuário só será atualizado quando fizer login/logout manualmente
+    
+  }, []);
 
   const signUp = async (email: string, password: string) => {
     try {
@@ -89,7 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error) {
-        await fetchUser();
+        // ✅ Buscar usuário atualizado após login
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
       }
       return { error };
     } catch (error) {
