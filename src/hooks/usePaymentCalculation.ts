@@ -1,10 +1,14 @@
+// src/hooks/usePaymentCalculation.ts
+
 import { useMemo } from 'react';
 import { FormData } from '../types/clinicalForm';
-import { calculateClinicalFinance, findProcedureByValue } from '../utils/clinicalCalculations';
+// CORRIGIDO: Importar de constants.ts
+import { PROCEDURE_TYPES } from '../utils/constants';
+import { calculateClinicalFinance } from '../utils/clinicalCalculations';
 
 export function usePaymentCalculation(formData: FormData) {
   return useMemo(() => {
-    const procedure = findProcedureByValue(formData.procedureType);
+    const procedure = PROCEDURE_TYPES.find(p => p.value === formData.procedureType);
     if (!procedure || !formData.grossValue) return null;
 
     const grossValueNum = parseFloat(formData.grossValue);
