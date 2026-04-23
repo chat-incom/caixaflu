@@ -1,3 +1,5 @@
+// src/utils/clinicalCalculations.ts
+
 import { PROCEDURE_TYPES, getPaymentTaxRates } from './constants';
 
 export interface FinancialPreview {
@@ -129,8 +131,4 @@ export const calculateTotalDeductions = (movement: any): number => {
          (movement.medication_cost || 0) + 
          (movement.supplies_cost || 0) + 
          (movement.other_costs || 0);
-};
-
-export const findProcedureByValue = (value: string) => {
-  return PROCEDURE_TYPES.find(p => p.value === value);
 };
