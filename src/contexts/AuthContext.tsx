@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+// src/contexts/AuthContext.tsx (VERSÃO OTIMIZADA)
+
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, getCachedSession, clearSessionCache } from '../lib/supabase';
 
 type AuthContextType = {
   user: User | null;
@@ -15,21 +17,67 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMounted = useRef(true);
+  const refreshingToken = useRef(false);
+
+  const fetchUser = useCallback(async () => {
+    if (!isMounted.current) return;
+    
+    try {
+      // ✅ Usar sessão com cache
+      const session = await getCachedSession();
+      
+      if (isMounted.current) {
+        setUser(session?.user ?? null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar sessão:', error);
+      if (isMounted.current) {
+        setUser(null);
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    isMounted.current = true;
+    fetchUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
+    // ✅ Listener otimizado
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event);
+      
+      // ✅ Ignorar token refresh para evitar recarregamento
+      if (event === 'TOKEN_REFRESHED') {
+        if (!refreshingToken.current) {
+          refreshingToken.current = true;
+          // Limpar cache e buscar nova sessão sem recarregar a página
+          clearSessionCache();
+          await getCachedSession();
+          refreshingToken.current = false;
+        }
+        return;
+      }
+      
+      // ✅ Para outros eventos, atualizar o estado
+      if (isMounted.current) {
         setUser(session?.user ?? null);
-      })();
+        
+        // Limpar cache em logout
+        if (event === 'SIGNED_OUT') {
+          clearSessionCache();
+        }
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      isMounted.current = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchUser]);
 
   const signUp = async (email: string, password: string) => {
     try {
@@ -43,6 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!error) {
+        clearSessionCache(); // Limpar cache após login
+        await fetchUser(); // Buscar usuário atualizado
+      }
       return { error };
     } catch (error) {
       return { error: error as Error };
@@ -50,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    clearSessionCache(); // Limpar cache antes de sair
     await supabase.auth.signOut();
   };
 
