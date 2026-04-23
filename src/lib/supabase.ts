@@ -1,3 +1,5 @@
+// src/lib/supabase.ts (VERSÃO CORRIGIDA)
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -7,8 +9,22 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,      // ✅ Renova token automaticamente
+    persistSession: true,         // ✅ Mantém sessão salva
+    detectSessionInUrl: false,    // 🔴 CRÍTICO: Impede detecção na URL
+    storage: window.localStorage, // ✅ Usa localStorage (mais estável)
+    flowType: 'pkce',            // ✅ Mais seguro para autenticação
+    debug: false,                // ✅ Desabilita logs em produção
+    
+    // 🔴 IMPORTANTE: Configurações para evitar recarregamento
+    // Essas opções impedem que o Supabase faça refresh quando a janela perde foco
+    storageKey: 'supabase.auth.token',  // Chave fixa no storage
+  },
+});
 
+// ✅ Tipos existentes (mantidos)
 export type InitialBalance = {
   id: string;
   user_id: string;
