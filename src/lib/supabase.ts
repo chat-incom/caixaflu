@@ -1,4 +1,4 @@
-// src/lib/supabase.ts (VERSÃO CORRIGIDA)
+// src/lib/supabase.ts (VERSÃO COMPLETA COM EXPORTS)
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,22 +9,48 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// ✅ Cache da sessão para evitar múltiplas chamadas
+let sessionCache: any = null;
+let lastSessionFetch = 0;
+const SESSION_CACHE_TTL = 60000; // 1 minuto
+
+// ✅ Cliente Supabase otimizado
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,      // ✅ Renova token automaticamente
-    persistSession: true,         // ✅ Mantém sessão salva
-    detectSessionInUrl: false,    // 🔴 CRÍTICO: Impede detecção na URL
-    storage: window.localStorage, // ✅ Usa localStorage (mais estável)
-    flowType: 'pkce',            // ✅ Mais seguro para autenticação
-    debug: false,                // ✅ Desabilita logs em produção
-    
-    // 🔴 IMPORTANTE: Configurações para evitar recarregamento
-    // Essas opções impedem que o Supabase faça refresh quando a janela perde foco
-    storageKey: 'supabase.auth.token',  // Chave fixa no storage
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+    storage: window.localStorage,
+    flowType: 'pkce',
+    debug: false,
+    storageKey: 'supabase.auth.token',
   },
 });
 
-// ✅ Tipos existentes (mantidos)
+// ✅ EXPORTAR função para buscar sessão com cache
+export const getCachedSession = async () => {
+  const now = Date.now();
+  
+  // Usar cache se estiver dentro do TTL
+  if (sessionCache && (now - lastSessionFetch) < SESSION_CACHE_TTL) {
+    return sessionCache;
+  }
+  
+  // Buscar nova sessão
+  const { data: { session } } = await supabase.auth.getSession();
+  sessionCache = session;
+  lastSessionFetch = now;
+  
+  return session;
+};
+
+// ✅ EXPORTAR função para limpar cache
+export const clearSessionCache = () => {
+  sessionCache = null;
+  lastSessionFetch = 0;
+};
+
+// ✅ Tipos
 export type InitialBalance = {
   id: string;
   user_id: string;
